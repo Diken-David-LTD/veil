@@ -1,0 +1,64 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "Represents a user of the VEIL platform.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "displayName": { "type": "string" },
+        "bio": { "type": "string" },
+        "birthDate": { "type": "string", "format": "date-time" },
+        "gender": { "type": "string", "enum": ["male", "female", "other"] },
+        "interestedIn": { "type": "string", "enum": ["male", "female", "all"] },
+        "neighborhood": { "type": "string", "description": "General area e.g. Victoria Island, Lekki" },
+        "isVerified": { "type": "boolean", "description": "Whether the user has completed ID verification" },
+        "verificationStatus": { "type": "string", "enum": ["pending", "verified", "rejected", "none"] },
+        "photoURL": { "type": "string" },
+        "swipeCount": { "type": "integer" },
+        "subscriptionTier": { "type": "string", "enum": ["free", "premium", "executive"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "displayName", "birthDate", "neighborhood"]
+    },
+    "Match": {
+      "title": "Match Connection",
+      "description": "Represents a mutual like or interaction between two users.",
+      "type": "object",
+      "properties": {
+        "users": { "type": "array", "items": { "type": "string" }, "description": "Array of the two user IDs" },
+        "likes": { "type": "object", "description": "Map of userId to timestamp of like" },
+        "isMutual": { "type": "boolean" },
+        "lastMessage": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "Message": {
+      "title": "Chat Message",
+      "description": "A single message in a match chat.",
+      "type": "object",
+      "properties": {
+        "senderId": { "type": "string" },
+        "text": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "isRead": { "type": "boolean" }
+      }
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Individual user profiles."
+    },
+    "/matches/{matchId}": {
+      "schema": "Match",
+      "description": "Mutual connection records."
+    },
+    "/matches/{matchId}/messages/{messageId}": {
+      "schema": "Message",
+      "description": "Messages within a match context."
+    }
+  }
+}
