@@ -3,7 +3,8 @@ import { collection, query, where, getDocs, doc, setDoc, updateDoc, arrayUnion, 
 import { db, handleFirestoreError, OperationType } from '../../lib/firebase';
 import { UserProfile, Match } from '../../types';
 import { motion, AnimatePresence } from 'motion/react';
-import { Heart, X, MapPin, ShieldCheck, Sparkles, Eye, User as UserIcon, Lock, Crown } from 'lucide-react';
+import { Heart, X, MapPin, ShieldCheck, Sparkles, Eye, User as UserIcon, Lock, Crown, SlidersHorizontal } from 'lucide-react';
+import { ai, MODELS } from '../../lib/gemini';
 
 interface DiscoveryProps {
   profile: UserProfile;
@@ -15,9 +16,25 @@ export default function Discovery({ profile }: DiscoveryProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [matchResult, setMatchResult] = useState<UserProfile | null>(null);
   const [showLimitReached, setShowLimitReached] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+  const [ageRange, setAgeRange] = useState({ min: 30, max: 55 });
+  const [viewMode, setViewMode] = useState<'discovery' | 'likes'>('discovery');
+  const [likesMe, setLikesMe] = useState<UserProfile[]>([]);
+
+  const calculateAge = (birthDate: string) => {
+    const birth = new Date(birthDate);
+    const now = new Date();
+    let age = now.getFullYear() - birth.getFullYear();
+    const m = now.getMonth() - birth.getMonth();
+    if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) {
+      age--;
+    }
+    return age;
+  };
 
   useEffect(() => {
     const fetchUsers = async () => {
+      setLoading(true);
       const path = 'users';
       try {
         const q = query(
@@ -28,8 +45,55 @@ export default function Discovery({ profile }: DiscoveryProps) {
         const snap = await getDocs(q);
         const fetched = snap.docs
           .map(d => d.data() as UserProfile)
-          .filter(u => u.uid !== profile.uid);
+          .filter(u => {
+            const age = calculateAge(u.birthDate);
+            return u.uid !== profile.uid && age >= ageRange.min && age <= ageRange.max;
+          });
         
+        // AI Matchmaking Logic for Premium/Executive Users
+        if ((profile.subscriptionTier === 'premium' || profile.subscriptionTier === 'executive') && fetched.length > 5) {
+          try {
+            const candidates = fetched.slice(0, 15).map(u => ({
+              uid: u.uid,
+              bio: u.bio || '',
+              interests: u.interests || [],
+              persona: u.desiredPersona || 'professional'
+            }));
+
+            const response = await ai.models.generateContent({
+              model: MODELS.text,
+              contents: [{
+                role: 'user',
+                parts: [{
+                  text: `Compare this user:
+                  - Bio: ${profile.bio}
+                  - Interests: ${profile.interests?.join(', ')}
+                  - Persona: ${profile.desiredPersona}
+                  
+                  To these candidates:
+                  ${JSON.stringify(candidates)}
+                  
+                  Rank the candidates (return ONLY an array of UIDs) from most compatible to least compatible based on professional synergy, shared prestige interests (like Yachting, Philanthropy, Angel Investing), and persona alignment.`
+                }]
+              }]
+            });
+
+            const rankedUids = JSON.parse(response.text?.replace(/```json|```/g, '').trim() || '[]');
+            if (Array.isArray(rankedUids)) {
+              fetched.sort((a, b) => {
+                const indexA = rankedUids.indexOf(a.uid);
+                const indexB = rankedUids.indexOf(b.uid);
+                if (indexA === -1 && indexB === -1) return 0;
+                if (indexA === -1) return 1;
+                if (indexB === -1) return -1;
+                return indexA - indexB;
+              });
+            }
+          } catch (aiErr) {
+            console.error("AI Ranking failed, falling back to default order", aiErr);
+          }
+        }
+
         setUsers(fetched);
         setLoading(false);
       } catch (error) {
@@ -37,7 +101,33 @@ export default function Discovery({ profile }: DiscoveryProps) {
       }
     };
     fetchUsers();
-  }, [profile]);
+  }, [profile, ageRange]);
+
+  useEffect(() => {
+    const fetchLikesMe = async () => {
+      try {
+        const q = query(
+          collection(db, 'matches'),
+          where('users', 'array-contains', profile.uid),
+          where('isMutual', '==', false)
+        );
+        const snap = await getDocs(q);
+        const likerIds = snap.docs
+          .map(d => d.data() as Match)
+          .filter(m => !m.likes[profile.uid]) // They liked me, but I haven't liked back
+          .map(m => m.users.find(id => id !== profile.uid)!);
+
+        if (likerIds.length > 0) {
+          const userPromises = likerIds.map(id => getDoc(doc(db, 'users', id)));
+          const userSnaps = await Promise.all(userPromises);
+          setLikesMe(userSnaps.map(s => s.data() as UserProfile));
+        }
+      } catch (error) {
+        console.error("Error fetching likes:", error);
+      }
+    };
+    if (profile.uid) fetchLikesMe();
+  }, [profile.uid, viewMode]);
 
   const handleSwipe = async (direction: 'left' | 'right') => {
     // Check limits for free users
@@ -94,109 +184,225 @@ export default function Discovery({ profile }: DiscoveryProps) {
   return (
     <div className="h-full flex flex-col relative px-4 pt-4">
       <header className="flex justify-between items-center mb-6">
-        <div>
-          <h2 className="text-2xl font-serif">Discovery</h2>
-          <p className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">Near {profile.neighborhood}</p>
+        <div className="flex gap-6">
+          <button 
+            onClick={() => setViewMode('discovery')}
+            className={`transition-all ${viewMode === 'discovery' ? 'text-white' : 'text-gray-500'}`}
+          >
+            <h2 className="text-2xl font-serif">Discovery</h2>
+            {viewMode === 'discovery' && <motion.div layoutId="tab" className="h-0.5 bg-[#F27D26] mt-1" />}
+          </button>
+          <button 
+            onClick={() => setViewMode('likes')}
+            className={`relative transition-all ${viewMode === 'likes' ? 'text-white' : 'text-gray-500'}`}
+          >
+            <h2 className="text-2xl font-serif">Interests</h2>
+            {likesMe.length > 0 && <span className="absolute -top-1 -right-4 w-4 h-4 bg-[#F27D26] text-black text-[8px] rounded-full flex items-center justify-center font-bold">{likesMe.length}</span>}
+            {viewMode === 'likes' && <motion.div layoutId="tab" className="h-0.5 bg-[#F27D26] mt-1" />}
+          </button>
         </div>
-        <div className={`p-2 rounded-lg ${profile.subscriptionTier === 'executive' ? 'bg-purple-500/10 text-purple-400' : 'bg-[#F27D26]/10 text-[#F27D26]'}`}>
-          {profile.subscriptionTier === 'executive' ? <Crown size={18} /> : <Sparkles size={18} />}
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={() => setShowFilters(!showFilters)}
+            className={`p-2 rounded-lg transition-all ${showFilters ? 'bg-[#F27D26] text-black' : 'bg-white/5 text-gray-400'}`}
+          >
+            <SlidersHorizontal size={18} />
+          </button>
+          <div className={`p-2 rounded-lg ${profile.subscriptionTier === 'executive' ? 'bg-purple-500/10 text-purple-400' : 'bg-[#F27D26]/10 text-[#F27D26]'}`}>
+            {profile.subscriptionTier === 'executive' ? <Crown size={18} /> : <Sparkles size={18} />}
+          </div>
         </div>
       </header>
 
-      <div className="flex-1 relative">
-        <AnimatePresence mode="wait">
-          {showLimitReached ? (
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="absolute inset-0 bg-[#0a0a0a] rounded-[2rem] border border-[#F27D26]/20 flex flex-col items-center justify-center p-8 text-center space-y-6"
-            >
-              <div className="w-16 h-16 rounded-full bg-[#F27D26]/10 flex items-center justify-center text-[#F27D26]">
-                <Lock size={32} />
+      <AnimatePresence>
+        {showFilters && (
+          <motion.div 
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="mb-6 bg-[#111] rounded-2xl border border-white/5 p-4 overflow-hidden"
+          >
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <span className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">Age Range Preference</span>
+                <span className="text-xs font-bold text-[#F27D26]">{ageRange.min} - {ageRange.max}</span>
               </div>
-              <div className="space-y-2">
-                <h3 className="text-xl font-serif text-white">Daily Limit Reached</h3>
-                <p className="text-xs text-gray-500 leading-relaxed">
-                  As a Standard professional, you have reached your daily interaction limit. Upgrade to maintain your presence without boundaries.
-                </p>
-              </div>
-              <button 
-                onClick={() => setShowLimitReached(false)}
-                className="w-full bg-[#F27D26] text-black py-4 rounded-full font-bold text-xs uppercase tracking-widest shadow-lg shadow-[#F27D26]/20"
-              >
-                Explore Tiers
-              </button>
-            </motion.div>
-          ) : currentUserDisplay ? (
-            <motion.div 
-              key={currentUserDisplay.uid}
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ x: 200, opacity: 0 }}
-              className="absolute inset-0 bg-[#111] rounded-[2rem] overflow-hidden border border-white/5 flex flex-col"
-            >
-              <div className="relative flex-1 bg-gradient-to-b from-gray-800 to-black">
-                {currentUserDisplay.photoURL ? (
-                   <img 
-                    src={currentUserDisplay.photoURL} 
-                    className="w-full h-full object-cover opacity-80" 
-                    alt={currentUserDisplay.displayName}
-                    referrerPolicy="no-referrer"
-                   />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center bg-[#181818]">
-                    <UserIcon size={80} className="opacity-10" />
-                  </div>
-                )}
-                
-                {/* Privacy Badge */}
-                {currentUserDisplay.isVerified && (
-                  <div className="absolute top-4 right-4 bg-white/10 backdrop-blur-md px-3 py-1 rounded-full flex items-center gap-1 border border-white/20">
-                    <ShieldCheck size={12} className="text-[#F27D26]" />
-                    <span className="text-[10px] uppercase tracking-widest font-bold">Verified</span>
-                  </div>
-                )}
-
-                <div className="absolute bottom-0 inset-x-0 p-6 bg-gradient-to-t from-black via-black/60 to-transparent">
-                  <div className="space-y-1">
-                    <h3 className="text-2xl font-semibold flex items-center gap-2">
-                      {currentUserDisplay.displayName}, {new Date().getFullYear() - new Date(currentUserDisplay.birthDate).getFullYear()}
-                    </h3>
-                    <div className="flex items-center gap-1 text-gray-400 text-xs text uppercase tracking-widest">
-                       <MapPin size={12} />
-                       {currentUserDisplay.neighborhood}
-                    </div>
-                  </div>
-                  <p className="mt-3 text-sm text-gray-300 line-clamp-2 leading-relaxed italic opacity-80">
-                    "{currentUserDisplay.bio || 'Professional in Lagos.'}"
-                  </p>
+              <div className="space-y-6 px-2">
+                <input 
+                  type="range" 
+                  min="30" 
+                  max="100" 
+                  value={ageRange.max}
+                  onChange={(e) => setAgeRange(prev => ({ ...prev, max: parseInt(e.target.value) }))}
+                  className="w-full accent-[#F27D26]"
+                />
+                <div className="flex justify-between text-[8px] text-gray-600 uppercase tracking-tighter">
+                  <span>30 Years</span>
+                  <span>Distinguished (100+)</span>
                 </div>
               </div>
-
-              {/* Actions */}
-              <div className="p-6 flex justify-around items-center bg-black/40">
-                <button 
-                  onClick={() => handleSwipe('left')}
-                  className="w-16 h-16 rounded-full border border-white/10 flex items-center justify-center text-gray-400 hover:bg-white/5 transition-all"
-                >
-                  <X size={24} />
-                </button>
-                <button 
-                  onClick={() => handleSwipe('right')}
-                  className="w-16 h-16 rounded-full bg-white text-black flex items-center justify-center shadow-xl hover:scale-105 active:scale-95 transition-all"
-                >
-                  <Heart size={24} fill="currentColor" />
-                </button>
-              </div>
-            </motion.div>
-          ) : (
-            <div className="flex flex-col items-center justify-center h-full text-center space-y-4 px-8">
-              <div className="w-20 h-20 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-gray-600">
-                <Eye size={32} />
-              </div>
-              <h3 className="text-xl font-serif">Discovery Paused</h3>
-              <p className="text-sm text-gray-500 leading-relaxed">We've shown you everyone in your immediate professional circle. Check back soon for new refined profiles.</p>
             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <div className="flex-1 relative">
+        <AnimatePresence mode="wait">
+          {viewMode === 'discovery' ? (
+            showLimitReached ? (
+              <motion.div 
+                key="limit"
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="absolute inset-0 bg-[#0a0a0a] rounded-[2rem] border border-[#F27D26]/20 flex flex-col items-center justify-center p-8 text-center space-y-6"
+              >
+                <div className="w-16 h-16 rounded-full bg-[#F27D26]/10 flex items-center justify-center text-[#F27D26]">
+                  <Lock size={32} />
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-xl font-serif text-white">Daily Limit Reached</h3>
+                  <p className="text-xs text-gray-500 leading-relaxed">
+                    As a Standard professional, you have reached your daily interaction limit. Upgrade to maintain your presence without boundaries.
+                  </p>
+                </div>
+                <button 
+                  onClick={() => setShowLimitReached(false)}
+                  className="w-full bg-[#F27D26] text-black py-4 rounded-full font-bold text-xs uppercase tracking-widest shadow-lg shadow-[#F27D26]/20"
+                >
+                  Explore Tiers
+                </button>
+              </motion.div>
+            ) : currentUserDisplay ? (
+              <motion.div 
+                key={currentUserDisplay.uid}
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ x: 200, opacity: 0 }}
+                className="absolute inset-0 bg-[#111] rounded-[2rem] overflow-hidden border border-white/5 flex flex-col"
+              >
+                {/* ... existing card content ... */}
+                <div className="relative flex-1 bg-gradient-to-b from-gray-800 to-black">
+                  {currentUserDisplay.photoURL ? (
+                     <img 
+                      src={currentUserDisplay.photoURL} 
+                      className="w-full h-full object-cover opacity-80" 
+                      alt={currentUserDisplay.displayName}
+                      referrerPolicy="no-referrer"
+                     />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-[#181818]">
+                      <UserIcon size={80} className="opacity-10" />
+                    </div>
+                  )}
+                  
+                  {/* Privacy Badge */}
+                  {currentUserDisplay.isVerified && (
+                    <div className="absolute top-4 right-4 bg-white/10 backdrop-blur-md px-3 py-1 rounded-full flex items-center gap-1 border border-white/20">
+                      <ShieldCheck size={12} className="text-[#F27D26]" />
+                      <span className="text-[10px] uppercase tracking-widest font-bold">Verified</span>
+                    </div>
+                  )}
+
+                  <div className="absolute bottom-0 inset-x-0 p-6 bg-gradient-to-t from-black via-black/60 to-transparent">
+                    <div className="space-y-1">
+                      <h3 className="text-2xl font-semibold flex items-center gap-2">
+                        {currentUserDisplay.displayName}{currentUserDisplay.privacySettings?.showAge !== false ? `, ${new Date().getFullYear() - new Date(currentUserDisplay.birthDate).getFullYear()}` : ''}
+                      </h3>
+                      <div className="flex items-center gap-1 text-gray-400 text-xs text uppercase tracking-widest">
+                         <MapPin size={12} />
+                         {currentUserDisplay.privacySettings?.showNeighborhood !== false ? currentUserDisplay.neighborhood : 'Disclosed on Match'}
+                      </div>
+                    </div>
+                    <p className="mt-3 text-sm text-gray-300 line-clamp-2 leading-relaxed italic opacity-80">
+                      "{currentUserDisplay.privacySettings?.showBio !== false ? (currentUserDisplay.bio || 'Saying hello from Lagos.') : 'Keeping things private for now.'}"
+                    </p>
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="p-6 flex justify-around items-center bg-black/40">
+                  <button 
+                    onClick={() => handleSwipe('left')}
+                    className="w-16 h-16 rounded-full border border-white/10 flex items-center justify-center text-gray-400 hover:bg-white/5 transition-all"
+                  >
+                    <X size={24} />
+                  </button>
+                  <button 
+                    onClick={() => handleSwipe('right')}
+                    className="w-16 h-16 rounded-full bg-white text-black flex items-center justify-center shadow-xl hover:scale-105 active:scale-95 transition-all"
+                  >
+                    <Heart size={24} fill="currentColor" />
+                  </button>
+                </div>
+              </motion.div>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full text-center space-y-4 px-8">
+                <div className="w-20 h-20 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-gray-600">
+                  <Eye size={32} />
+                </div>
+                <h3 className="text-xl font-serif">Discovery Paused</h3>
+                <p className="text-sm text-gray-500 leading-relaxed">We've shown you everyone in your immediate professional circle. Check back soon for new refined profiles.</p>
+              </div>
+            )
+          ) : (
+            <motion.div 
+              key="likes-grid"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="grid grid-cols-2 gap-4 h-full p-1 overflow-y-auto"
+            >
+              {likesMe.length > 0 ? (
+                likesMe.map(liker => (
+                  <div 
+                    key={liker.uid}
+                    className="aspect-[3/4] relative rounded-3xl overflow-hidden border border-white/5 bg-[#111] group"
+                  >
+                    <img 
+                      src={liker.photoURL} 
+                      className={`w-full h-full object-cover transition-all duration-700 ${profile.subscriptionTier === 'free' ? 'blur-xl scale-110 grayscale brightness-75' : 'group-hover:scale-105'}`}
+                      alt="Secret User"
+                      referrerPolicy="no-referrer"
+                    />
+                    
+                    {profile.subscriptionTier === 'free' ? (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center p-4 text-center bg-black/20">
+                        <Lock size={20} className="text-[#F27D26] mb-2" />
+                        <p className="text-[8px] uppercase tracking-[0.2em] font-bold text-white mb-4">Interested Member</p>
+                        <button className="text-[8px] uppercase tracking-widest font-bold text-[#F27D26] bg-[#F27D26]/10 px-3 py-1.5 rounded-full border border-[#F27D26]/20">
+                          Reveal Presence
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-black to-transparent">
+                        <p className="text-xs font-bold truncate">{liker.displayName}</p>
+                        <p className="text-[8px] text-gray-400 uppercase tracking-widest">{liker.neighborhood}</p>
+                        <button 
+                          onClick={() => {
+                            // Find index in main users list to trigger swipe right
+                            const idx = users.findIndex(u => u.uid === liker.uid);
+                            if (idx !== -1) {
+                              setCurrentIndex(idx);
+                              setViewMode('discovery');
+                            }
+                          }}
+                          className="mt-2 w-full py-1.5 bg-white text-black rounded-lg text-[8px] font-bold uppercase tracking-widest"
+                        >
+                          View Profile
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))
+              ) : (
+                <div className="col-span-2 flex flex-col items-center justify-center p-12 text-center space-y-4">
+                  <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center text-gray-700/30">
+                    <Heart size={24} />
+                  </div>
+                  <h3 className="text-lg font-serif">No incoming interests yet</h3>
+                  <p className="text-xs text-gray-500 italic">Your refined presence will attract the right connections in time.</p>
+                </div>
+              )}
+            </motion.div>
           )}
         </AnimatePresence>
       </div>

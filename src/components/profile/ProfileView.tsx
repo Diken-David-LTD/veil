@@ -1,11 +1,12 @@
 import React, { useState, useRef } from 'react';
 import { UserProfile, SubscriptionTier } from '../../types';
 import { motion, AnimatePresence } from 'motion/react';
-import { ShieldCheck, LogOut, CreditCard, ChevronRight, BadgeCheck, EyeOff, Lock, Camera, Loader2, Sparkles, Crown, Zap, Edit2, Check, X as CloseIcon } from 'lucide-react';
+import { ShieldCheck, LogOut, CreditCard, ChevronRight, BadgeCheck, EyeOff, Lock, Camera, Loader2, Sparkles, Crown, Zap, Edit2, Check, X as CloseIcon, MapPin, Calendar, Heart } from 'lucide-react';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage, handleFirestoreError, OperationType } from '../../lib/firebase';
 import { ai, MODELS } from '../../lib/gemini';
+import InterestsPicker from './InterestsPicker';
 
 interface ProfileViewProps {
   profile: UserProfile;
@@ -37,8 +38,11 @@ export default function ProfileView({ profile, onLogout }: ProfileViewProps) {
   const [isVerifying, setIsVerifying] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [showUpgrade, setShowUpgrade] = useState(false);
+  const [showPrivacySettings, setShowPrivacySettings] = useState(false);
   const [isEditingBio, setIsEditingBio] = useState(false);
+  const [isEditingInterests, setIsEditingInterests] = useState(false);
   const [tempBio, setTempBio] = useState(profile.bio || '');
+  const [tempInterests, setTempInterests] = useState<string[]>(profile.interests || []);
   const [isGenerating, setIsGenerating] = useState(false);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   
@@ -96,6 +100,18 @@ export default function ProfileView({ profile, onLogout }: ProfileViewProps) {
     }
   };
 
+  const saveInterests = async () => {
+    try {
+      await updateDoc(doc(db, 'users', profile.uid), {
+        interests: tempInterests,
+        updatedAt: serverTimestamp()
+      });
+      setIsEditingInterests(false);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `users/${profile.uid}`);
+    }
+  };
+
   const generateBio = async () => {
     setIsGenerating(true);
     try {
@@ -114,6 +130,29 @@ export default function ProfileView({ profile, onLogout }: ProfileViewProps) {
       console.error("AI Bio generation failed", error);
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  const togglePrivacy = async (key: keyof NonNullable<UserProfile['privacySettings']>) => {
+    const currentSettings = profile.privacySettings || {
+      showNeighborhood: true,
+      showInterests: true,
+      showBio: true,
+      showAge: true
+    };
+
+    const newSettings = {
+      ...currentSettings,
+      [key]: !currentSettings[key]
+    };
+
+    try {
+      await updateDoc(doc(db, 'users', profile.uid), {
+        privacySettings: newSettings,
+        updatedAt: serverTimestamp()
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `users/${profile.uid}`);
     }
   };
 
@@ -189,7 +228,7 @@ export default function ProfileView({ profile, onLogout }: ProfileViewProps) {
          {/* Bio Section */}
          <section className="bg-[#111] rounded-2xl p-5 border border-white/5 space-y-4">
             <div className="flex justify-between items-center">
-              <h4 className="text-[10px] uppercase tracking-[0.2em] text-gray-500 font-bold">The Narrative</h4>
+              <h4 className="text-[10px] uppercase tracking-[0.2em] text-gray-500 font-bold">About you</h4>
               {!isEditingBio ? (
                 <button onClick={() => { setIsEditingBio(true); setTempBio(profile.bio || ''); }} className="text-[#F27D26] p-1">
                    <Edit2 size={14} />
@@ -215,7 +254,7 @@ export default function ProfileView({ profile, onLogout }: ProfileViewProps) {
                   className="w-full flex items-center justify-center gap-2 py-3 bg-[#F27D26]/10 text-[#F27D26] text-[10px] uppercase tracking-widest font-bold rounded-xl hover:bg-[#F27D26]/20 transition-all border border-[#F27D26]/20"
                 >
                   {isGenerating ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                  Refine Narrative with AI
+                  Polished by AI Concierge
                 </button>
                 
                 <AnimatePresence>
@@ -241,8 +280,41 @@ export default function ProfileView({ profile, onLogout }: ProfileViewProps) {
               </div>
             ) : (
               <p className="text-sm text-gray-300 leading-relaxed italic">
-                "{profile.bio || 'Your digital narrative is yet to be established.'}"
+                "{profile.bio || 'Say hello! Tell us a bit about who you are.'}"
               </p>
+            )}
+         </section>
+
+         {/* Interests Section */}
+         <section className="bg-[#111] rounded-2xl p-5 border border-white/5 space-y-4">
+            <div className="flex justify-between items-center">
+              <h4 className="text-[10px] uppercase tracking-[0.2em] text-gray-500 font-bold">Interests</h4>
+              {!isEditingInterests ? (
+                <button onClick={() => { setIsEditingInterests(true); setTempInterests(profile.interests || []); }} className="text-[#F27D26] p-1">
+                   <Edit2 size={14} />
+                </button>
+              ) : (
+                <div className="flex items-center gap-2">
+                   <button onClick={saveInterests} className="p-1 text-green-500"><Check size={16}/></button>
+                   <button onClick={() => setIsEditingInterests(false)} className="p-1 text-red-500"><CloseIcon size={16}/></button>
+                </div>
+              )}
+            </div>
+
+            {isEditingInterests ? (
+              <InterestsPicker selected={tempInterests} onChange={setTempInterests} />
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {profile.interests && profile.interests.length > 0 ? (
+                  profile.interests.map(i => (
+                    <span key={i} className="px-3 py-1 bg-white/5 border border-white/10 rounded-full text-[10px] text-gray-400">
+                      {i}
+                    </span>
+                  ))
+                ) : (
+                  <p className="text-xs text-gray-500">No interests selected yet.</p>
+                )}
+              </div>
             )}
          </section>
 
@@ -310,9 +382,52 @@ export default function ProfileView({ profile, onLogout }: ProfileViewProps) {
 
          <section className="bg-[#111] rounded-2xl p-4 border border-white/5 space-y-4">
             <div className="flex justify-between items-center">
-              <h4 className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">Preferences</h4>
-              <button className="text-[10px] text-[#F27D26] uppercase tracking-widest font-bold">Update</button>
+              <h4 className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">Privacy Controls</h4>
+              <button 
+                onClick={() => setShowPrivacySettings(!showPrivacySettings)}
+                className="text-[10px] text-[#F27D26] uppercase tracking-widest font-bold"
+              >
+                {showPrivacySettings ? 'Collapse' : 'Manage'}
+              </button>
             </div>
+
+            <AnimatePresence>
+              {showPrivacySettings && (
+                <motion.div 
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  className="space-y-3 overflow-hidden"
+                >
+                  {[
+                    { key: 'showBio', label: 'Display Bio', icon: <Edit2 size={14} /> },
+                    { key: 'showNeighborhood', label: 'Display Neighborhood', icon: <MapPin size={14} /> },
+                    { key: 'showInterests', label: 'Display Interests', icon: <Sparkles size={14} /> },
+                    { key: 'showAge', label: 'Display Age', icon: <Calendar size={14} /> },
+                  ].map((setting) => {
+                    const isVisible = profile.privacySettings?.[setting.key as keyof NonNullable<UserProfile['privacySettings']>] ?? true;
+                    return (
+                      <div key={setting.key} className="flex items-center justify-between py-1">
+                        <div className="flex items-center gap-3">
+                          <div className="text-gray-500">{setting.icon}</div>
+                          <span className="text-xs text-gray-300">{setting.label}</span>
+                        </div>
+                        <button 
+                          onClick={() => togglePrivacy(setting.key as keyof NonNullable<UserProfile['privacySettings']>)}
+                          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-tighter transition-all ${isVisible ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'}`}
+                        >
+                          {isVisible ? <BadgeCheck size={12} /> : <EyeOff size={12} />}
+                          {isVisible ? 'Visible' : 'Hidden'}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </motion.div>
+              )}
+            </AnimatePresence>
+         </section>
+
+         <section className="bg-[#111] rounded-2xl p-4 border border-white/5 space-y-4">
             <div className="flex items-center justify-between py-1">
                <span className="text-sm text-gray-300">Interested in</span>
                <span className="text-xs text-[#F27D26] capitalize">{profile.interestedIn}</span>
@@ -328,7 +443,7 @@ export default function ProfileView({ profile, onLogout }: ProfileViewProps) {
           className="w-full flex items-center justify-center gap-2 p-4 text-red-500 text-xs uppercase tracking-widest font-bold hover:bg-red-500/10 rounded-xl transition-all border border-red-500/10"
          >
            <LogOut size={16} />
-           Terminate Session
+           Sign Out for Now
          </button>
        </div>
 
@@ -348,10 +463,16 @@ export default function ProfileView({ profile, onLogout }: ProfileViewProps) {
                className="w-full bg-[#0a0a0a] rounded-t-[2.5rem] p-8 pb-12 space-y-8 max-h-[90vh] overflow-y-auto"
              >
                 <div className="flex justify-between items-center">
-                  <h2 className="text-3xl font-serif italic">Elevate Status</h2>
+                  <h2 className="text-3xl font-serif italic">Unlock the Full Experience</h2>
                   <button onClick={() => setShowUpgrade(false)} className="p-2 bg-white/5 rounded-full text-gray-500">
                     <CloseIcon size={24} />
                   </button>
+                </div>
+
+                <div className="space-y-4 text-center">
+                   <p className="text-xs text-gray-500 leading-relaxed max-w-xs mx-auto italic">
+                     "Veil is better with friends. Choose a membership that fits your desired level of connection."
+                   </p>
                 </div>
 
                 <div className="space-y-4">

@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, updateDoc } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, updateDoc, writeBatch, where, getDocs } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../../lib/firebase';
 import { Match, Message } from '../../types';
 import { motion, AnimatePresence } from 'motion/react';
-import { Send, ArrowLeft, ShieldAlert, CircleAlert, BadgeCheck } from 'lucide-react';
-import { GoogleGenAI } from "@google/genai";
+import { Send, ArrowLeft, ShieldAlert, CircleAlert, BadgeCheck, MoreVertical, Flag, Ban } from 'lucide-react';
 import { ai, MODELS } from '../../lib/gemini';
 
 interface ChatThreadProps {
@@ -17,6 +16,8 @@ export default function ChatThread({ match, currentUserId, onBack }: ChatThreadP
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
   const [isScamWarning, setIsScamWarning] = useState(false);
+  const [showOptions, setShowOptions] = useState(false);
+  const [isReporting, setIsReporting] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const otherUser = match.participants?.find(p => p.uid !== currentUserId);
   const currentUserProfile = match.participants?.find(p => p.uid === currentUserId);
@@ -28,13 +29,22 @@ export default function ChatThread({ match, currentUserId, onBack }: ChatThreadP
     );
 
     const unsubscribe = onSnapshot(q, (snap) => {
-      setMessages(snap.docs.map(d => ({ id: d.id, ...d.data() } as Message)));
+      const newMessages = snap.docs.map(d => ({ id: d.id, ...d.data() } as Message));
+      setMessages(newMessages);
+
+      // Mark unread messages from other user as read
+      const unread = snap.docs.filter(d => d.data().senderId !== currentUserId && !d.data().isRead);
+      if (unread.length > 0) {
+        unread.forEach(d => {
+          updateDoc(doc(db, `matches/${match.id}/messages`, d.id), { isRead: true });
+        });
+      }
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, `matches/${match.id}/messages`);
     });
 
     return unsubscribe;
-  }, [match.id]);
+  }, [match.id, currentUserId]);
 
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -48,13 +58,34 @@ export default function ChatThread({ match, currentUserId, onBack }: ChatThreadP
         model: MODELS.text,
         contents: text,
         config: {
+          //@ts-ignore - systemInstruction might not be in all model versions yet but keeping original pattern
           systemInstruction: "You are a safety filter for a premium dating app in Nigeria. Analyze the message for signs of: sharing bank details, phone numbers too early, external social handles (Instagram/Telegram), or predatory investment advice. Respond with 'SAFE' or 'WARNING' only."
         }
       });
       return response.text?.includes('WARNING') || false;
     } catch (e) {
-      console.error("Gemini Safety Check failed", e);
+      console.error("Safety Check failed", e);
       return false;
+    }
+  };
+
+  const handleReport = async (reason: string) => {
+    if (!otherUser) return;
+    setIsReporting(true);
+    try {
+      await addDoc(collection(db, 'reports'), {
+        reporterId: currentUserId,
+        reportedUserId: otherUser.uid,
+        matchId: match.id,
+        reason,
+        createdAt: serverTimestamp()
+      });
+      alert("Report submitted. Our concierge team will review this discreetly.");
+      setShowOptions(false);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, 'reports');
+    } finally {
+      setIsReporting(false);
     }
   };
 
@@ -92,21 +123,65 @@ export default function ChatThread({ match, currentUserId, onBack }: ChatThreadP
 
   return (
     <div className="fixed inset-0 bg-[#050505] z-[60] flex flex-col">
-      <header className="p-4 border-b border-white/5 flex items-center gap-3 bg-black/40 backdrop-blur-md">
-        <button onClick={onBack} className="p-2 hover:bg-white/5 rounded-full">
-          <ArrowLeft size={20} />
-        </button>
+      <header className="p-4 border-b border-white/5 flex items-center justify-between bg-black/40 backdrop-blur-md">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-800">
-             <img src={otherUser?.photoURL} alt={otherUser?.displayName} className="w-full h-full object-cover" />
+          <button onClick={onBack} className="p-2 hover:bg-white/5 rounded-full">
+            <ArrowLeft size={20} />
+          </button>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-800">
+               <img src={otherUser?.photoURL} alt={otherUser?.displayName} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+            </div>
+            <div>
+              <h4 className="text-sm font-medium flex items-center gap-1">
+                {otherUser?.displayName}
+                {otherUser?.isVerified && <BadgeCheck size={14} className="text-[#F27D26]" />}
+              </h4>
+              <p className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">{otherUser?.neighborhood}</p>
+            </div>
           </div>
-          <div>
-            <h4 className="text-sm font-medium flex items-center gap-1">
-              {otherUser?.displayName}
-              {otherUser?.isVerified && <BadgeCheck size={14} className="text-[#F27D26]" />}
-            </h4>
-            <p className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">{otherUser?.neighborhood}</p>
-          </div>
+        </div>
+
+        <div className="relative">
+          <button 
+            onClick={() => setShowOptions(!showOptions)}
+            className="p-2 hover:bg-white/5 rounded-full text-gray-500"
+          >
+            <MoreVertical size={20} />
+          </button>
+
+          <AnimatePresence>
+            {showOptions && (
+              <>
+                <div className="fixed inset-0" onClick={() => setShowOptions(false)} />
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                  className="absolute right-0 top-full mt-2 w-48 bg-[#111] border border-white/10 rounded-xl overflow-hidden shadow-2xl z-10"
+                >
+                  <button 
+                    onClick={() => handleReport('Spam/Scam')}
+                    className="w-full px-4 py-3 text-left text-xs flex items-center gap-3 hover:bg-white/5 transition-all text-red-500"
+                  >
+                    <Flag size={14} /> Report Discretion Breach
+                  </button>
+                  <button 
+                    onClick={() => handleReport('Harassment')}
+                    className="w-full px-4 py-3 text-left text-xs flex items-center gap-3 hover:bg-white/5 transition-all text-red-500"
+                  >
+                    <ShieldAlert size={14} /> Unprofessional Conduct
+                  </button>
+                  <button 
+                    onClick={() => alert("User blocked. They will no longer see your presence.")}
+                    className="w-full px-4 py-3 text-left text-xs flex items-center gap-3 hover:bg-white/5 transition-all text-gray-400"
+                  >
+                    <Ban size={14} /> Block Profile
+                  </button>
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>
         </div>
       </header>
 

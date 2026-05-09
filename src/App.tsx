@@ -77,10 +77,13 @@ export default function App() {
         >
           <div className="space-y-4 text-center">
             <h1 className="text-8xl font-serif tracking-tighter leading-none italic select-none">Veil</h1>
-            <div className="flex items-center justify-center gap-4 text-[#F27D26]/60">
-              <span className="h-px w-8 bg-current" />
-              <p className="text-[10px] font-sans uppercase tracking-[0.4em] font-medium text-[#F27D26]">Est. 2024</p>
-              <span className="h-px w-8 bg-current" />
+            <div className="flex flex-col items-center gap-2">
+              <p className="text-[10px] font-sans uppercase tracking-[0.4em] font-medium text-[#F27D26]">by ConnectFest Network</p>
+              <div className="flex items-center justify-center gap-4 text-white/20">
+                <span className="h-px w-8 bg-current" />
+                <p className="text-[9px] uppercase tracking-[0.2em]">Authentic Connections</p>
+                <span className="h-px w-8 bg-current" />
+              </div>
             </div>
           </div>
           
@@ -89,7 +92,7 @@ export default function App() {
             onLoginEnd={() => setIsLoggingIn(false)}
           />
           
-          <p className="text-[10px] text-gray-700 uppercase tracking-widest font-medium">30+ Professionals Only • NDPA 2023 Compliant</p>
+          <p className="text-[10px] text-gray-500 uppercase tracking-widest font-medium">Exclusive to Professionals • Respecting Your Privacy</p>
         </motion.div>
       </div>
     );

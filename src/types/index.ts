@@ -14,8 +14,16 @@ export interface UserProfile {
   photoURL?: string;
   swipeCount: number;
   subscriptionTier: SubscriptionTier;
+  interests?: string[];
+  desiredPersona?: string;
   createdAt: any;
   updatedAt: any;
+  privacySettings?: {
+    showNeighborhood: boolean;
+    showInterests: boolean;
+    showBio: boolean;
+    showAge: boolean;
+  };
 }
 
 export interface Match {

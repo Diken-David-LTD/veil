@@ -5,8 +5,9 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage, handleFirestoreError, OperationType } from '../../lib/firebase';
 import { UserProfile } from '../../types';
 import { motion, AnimatePresence } from 'motion/react';
-import { MapPin, Calendar, User as UserIcon, ShieldCheck, Sparkles, Loader2, Camera, X } from 'lucide-react';
+import { MapPin, Calendar, User as UserIcon, ShieldCheck, Sparkles, Loader2, Camera, X, Check } from 'lucide-react';
 import { ai, MODELS } from '../../lib/gemini';
+import InterestsPicker from './InterestsPicker';
 
 interface OnboardingProps {
   user: User;
@@ -20,6 +21,8 @@ export default function Onboarding({ user, onComplete }: OnboardingProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [isConciergeLoading, setIsConciergeLoading] = useState(false);
+  const [conciergeStrategy, setConciergeStrategy] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [selectedTone, setSelectedTone] = useState('refined');
   const [idFile, setIdFile] = useState<File | null>(null);
@@ -34,7 +37,30 @@ export default function Onboarding({ user, onComplete }: OnboardingProps) {
     gender: 'male',
     interestedIn: 'female',
     neighborhood: 'Victoria Island',
+    professionalBackground: '',
+    desiredPersona: 'enigmatic',
+    interests: [] as string[],
   });
+
+  const consultConcierge = async () => {
+    if (!formData.professionalBackground) return;
+    setIsConciergeLoading(true);
+    try {
+      const response = await ai.models.generateContent({
+        model: MODELS.text,
+        contents: `As the 'Veil Concierge', a high-end matchmaker for Nigerian elites, provide a 2-sentence exclusive profile strategy for ${formData.displayName}. 
+        Professional Context: ${formData.professionalBackground}. 
+        Desired Persona: ${formData.desiredPersona}. 
+        Location: ${formData.neighborhood}.
+        Keep it sharp, sophisticated, and encouraging. Focus on standing out in a discreet professional network.`,
+      });
+      setConciergeStrategy(response.text);
+    } catch (error) {
+      console.error("Concierge consultation failed", error);
+    } finally {
+      setIsConciergeLoading(false);
+    }
+  };
 
   const handleIdSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -136,6 +162,9 @@ export default function Onboarding({ user, onComplete }: OnboardingProps) {
       const response = await ai.models.generateContent({
         model: MODELS.text,
         contents: `Generate 3 short, professional dating bios for someone named ${formData.displayName} living in ${formData.neighborhood}, Nigeria. 
+        Background: ${formData.professionalBackground || 'High-level professional'}.
+        Desired Persona: ${formData.desiredPersona}.
+        Current Bio/Notes: ${formData.bio || 'New user'}.
         Tone requirements: ${selectedTone}. 
         Audience: Premium professionals who value discretion and success.
         Length: Under 150 characters per bio. 
@@ -235,23 +264,24 @@ export default function Onboarding({ user, onComplete }: OnboardingProps) {
     >
       <header className="space-y-1">
         <p className="text-[10px] uppercase tracking-widest text-[#F27D26] font-bold">Step {step} of 5</p>
-        <h1 className="text-3xl font-serif">Curating your Presence</h1>
+        <h1 className="text-3xl font-serif">Hello there. Let's get started.</h1>
       </header>
 
       {step === 1 && (
         <div className="space-y-6">
           <div className="space-y-2">
-            <label className="text-xs uppercase tracking-widest opacity-50">Professional Name</label>
+            <label className="text-xs uppercase tracking-widest opacity-50">Your full name</label>
             <input 
               type="text" 
               value={formData.displayName}
               onChange={e => setFormData({...formData, displayName: e.target.value})}
-              className="w-full bg-[#111] border border-white/10 p-4 rounded-xl focus:border-[#F27D26] outline-none transition-all"
+              placeholder="e.g. David Diken"
+              className="w-full bg-[#111] border border-white/10 p-4 rounded-xl focus:border-[#F27D26] outline-none transition-all placeholder:text-gray-700"
             />
           </div>
 
           <div className="space-y-2">
-            <label className="text-xs uppercase tracking-widest opacity-50">Date of Birth (30+ requirement)</label>
+            <label className="text-xs uppercase tracking-widest opacity-50">Birthday (must be 30+)</label>
             <div className="relative">
               <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 opacity-30" />
               <input 
@@ -321,13 +351,79 @@ export default function Onboarding({ user, onComplete }: OnboardingProps) {
               ))}
             </div>
           </div>
+
+          <div className="pt-4 border-t border-white/5">
+            <InterestsPicker 
+              selected={formData.interests} 
+              onChange={(interests) => setFormData({...formData, interests})} 
+            />
+          </div>
         </div>
       )}
 
       {step === 3 && (
         <div className="space-y-6">
           <div className="space-y-4">
-            <div className="space-y-2">
+            <div className="bg-[#111] p-6 rounded-2xl border border-[#F27D26]/20 space-y-4 mb-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3 text-[#F27D26]">
+                  <Sparkles size={20} />
+                  <h3 className="font-medium text-[10px] uppercase tracking-widest">Veil AI Concierge</h3>
+                </div>
+                <button 
+                  onClick={consultConcierge}
+                  disabled={isConciergeLoading || !formData.professionalBackground}
+                  className="text-[10px] text-[#F27D26] uppercase tracking-widest font-bold hover:opacity-80 disabled:opacity-30"
+                >
+                  {isConciergeLoading ? <Loader2 size={12} className="animate-spin" /> : 'Get Strategy'}
+                </button>
+              </div>
+              
+              <AnimatePresence mode="wait">
+                {conciergeStrategy ? (
+                  <motion.p 
+                    initial={{ opacity: 0, y: 5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="text-[10px] text-gray-400 italic leading-relaxed"
+                  >
+                    "{conciergeStrategy}"
+                  </motion.p>
+                ) : (
+                  <p className="text-[10px] text-gray-500 leading-relaxed uppercase tracking-wider">
+                    Provide your professional background below for an personalized profile strategy.
+                  </p>
+                )}
+              </AnimatePresence>
+            </div>
+
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-xs uppercase tracking-widest opacity-50">Professional Background</label>
+                <input 
+                  type="text" 
+                  placeholder="Tell us what you do, e.g. Designer, Founder, Lawyer..."
+                  value={formData.professionalBackground}
+                  onChange={e => setFormData({...formData, professionalBackground: e.target.value})}
+                  className="w-full bg-[#111] border border-white/10 p-4 rounded-xl focus:border-[#F27D26] outline-none placeholder:opacity-20 text-sm"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs uppercase tracking-widest opacity-50">Desired Persona</label>
+                <select 
+                  value={formData.desiredPersona}
+                  onChange={e => setFormData({...formData, desiredPersona: e.target.value})}
+                  className="w-full bg-[#111] border border-white/10 p-4 rounded-xl focus:border-[#F27D26] outline-none text-sm"
+                >
+                  <option value="enigmatic">Enigmatic & Powerful</option>
+                  <option value="warm">Warm & Charismatic Leader</option>
+                  <option value="intellectual">Authentic & Intellectual</option>
+                  <option value="adventurous">Dynamic & Adventurous</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="space-y-2 pt-4 border-t border-white/5">
               <label className="text-[10px] uppercase tracking-[0.2em] opacity-40 font-bold">Select Bio Character</label>
               <div className="flex flex-wrap gap-2">
                 {['refined', 'ambitious', 'reserved', 'witty'].map(tone => (
@@ -343,24 +439,36 @@ export default function Onboarding({ user, onComplete }: OnboardingProps) {
             </div>
 
             <div className="space-y-2">
-              <div className="flex justify-between items-end">
+              <div className="flex justify-between items-center">
                 <label className="text-xs uppercase tracking-widest opacity-50">Professional Bio</label>
+                {suggestions.length > 0 && (
+                  <button 
+                    onClick={generateBio}
+                    disabled={isGenerating}
+                    className="flex items-center gap-1 text-[10px] text-[#F27D26] uppercase tracking-widest font-bold hover:opacity-80 disabled:opacity-30"
+                  >
+                    {isGenerating ? <Loader2 size={10} className="animate-spin" /> : <Sparkles size={10} />}
+                    Regenerate
+                  </button>
+                )}
+              </div>
+              <div className="relative">
+                <textarea 
+                  rows={4}
+                  placeholder="Keep it brief and sophisticated..."
+                  value={formData.bio}
+                  onChange={e => setFormData({...formData, bio: e.target.value})}
+                  className="w-full bg-[#111] border border-white/10 p-4 rounded-xl focus:border-[#F27D26] outline-none pr-12"
+                />
                 <button 
                   onClick={generateBio}
                   disabled={isGenerating || !formData.displayName}
-                  className="flex items-center gap-2 text-[10px] text-[#F27D26] uppercase tracking-widest font-bold hover:opacity-80 disabled:opacity-30 transition-all bg-[#F27D26]/10 px-3 py-1.5 rounded-lg"
+                  className="absolute top-4 right-4 text-[#F27D26] hover:scale-110 transition-transform disabled:opacity-30"
+                  title="Generate with AI"
                 >
-                  {isGenerating ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
-                  {isGenerating ? 'Curating...' : 'Refine with AI'}
+                  {isGenerating ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
                 </button>
               </div>
-              <textarea 
-                rows={4}
-                placeholder="Keep it brief and sophisticated..."
-                value={formData.bio}
-                onChange={e => setFormData({...formData, bio: e.target.value})}
-                className="w-full bg-[#111] border border-white/10 p-4 rounded-xl focus:border-[#F27D26] outline-none"
-              />
             </div>
           </div>
 
@@ -388,10 +496,10 @@ export default function Onboarding({ user, onComplete }: OnboardingProps) {
           <div className="bg-[#111] p-6 rounded-2xl border border-[#F27D26]/20 space-y-4">
             <div className="flex items-center gap-3 text-[#F27D26]">
                <ShieldCheck size={24} />
-               <h3 className="font-medium text-xs uppercase tracking-widest">Mandatory Verification</h3>
+               <h3 className="font-medium text-xs uppercase tracking-widest">Keeping it safe</h3>
             </div>
             <p className="text-[10px] text-gray-400 leading-relaxed uppercase tracking-widest">
-              Identity verification and a professional profile photo are required for all Veil members. You must provide these in the subsequent steps.
+              To keep our community high-quality, we ask for a quick identity check and a friendly profile photo in the next steps.
             </p>
           </div>
         </div>
@@ -400,8 +508,8 @@ export default function Onboarding({ user, onComplete }: OnboardingProps) {
       {step === 4 && (
         <div className="space-y-6">
           <div className="space-y-2">
-            <h3 className="text-xl font-serif italic text-white">Profile Aesthetic</h3>
-            <p className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">Public Face of your Identity</p>
+            <h3 className="text-xl font-serif italic text-white">Your Profile Photo</h3>
+            <p className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">How others will see you</p>
           </div>
 
           <div className="flex justify-center">
@@ -443,8 +551,8 @@ export default function Onboarding({ user, onComplete }: OnboardingProps) {
       {step === 5 && (
         <div className="space-y-6">
           <div className="space-y-2">
-            <h3 className="text-xl font-serif italic text-white">Identity Integrity</h3>
-            <p className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">Secure Document Port</p>
+            <h3 className="text-xl font-serif italic text-white">Member Safety</h3>
+            <p className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">Making sure it's really you</p>
           </div>
 
           <div className="bg-[#111] border-2 border-dashed border-white/10 rounded-[2rem] p-8 text-center space-y-4 relative overflow-hidden group">
@@ -466,7 +574,7 @@ export default function Onboarding({ user, onComplete }: OnboardingProps) {
                   <Camera size={32} className="text-gray-500 group-hover:text-[#F27D26]" />
                 </div>
                 <div className="space-y-1">
-                  <p className="text-sm font-medium text-gray-300">Upload Government ID</p>
+                  <p className="text-sm font-medium text-gray-300">Snap a Photo of your ID</p>
                   <p className="text-[10px] text-gray-600 uppercase tracking-widest font-bold">NIN • Passport • Driver's License</p>
                 </div>
                 <input type="file" className="hidden" accept="image/*" onChange={handleIdSelect} />
@@ -488,10 +596,10 @@ export default function Onboarding({ user, onComplete }: OnboardingProps) {
           <div className="bg-[#111] p-6 rounded-2xl border border-white/5 space-y-4">
             <div className="flex items-center gap-3 text-gray-400">
                <ShieldCheck size={24} />
-               <p className="text-[10px] uppercase tracking-widest font-bold">Discretion Policy</p>
+               <p className="text-[10px] uppercase tracking-widest font-bold">Your Privacy Matters</p>
             </div>
             <p className="text-[10px] text-gray-600 leading-relaxed uppercase tracking-[0.15em]">
-              Your ID data is encrypted at rest and never shared. We utilize AI-driven validation followed by a final manual review by our high-level concierge team.
+              We take your privacy seriously. Your ID is only used for a one-time verification by our trusted team to ensure everyone here is who they say they are.
             </p>
           </div>
         </div>
@@ -516,7 +624,7 @@ export default function Onboarding({ user, onComplete }: OnboardingProps) {
           className="flex-[2] bg-white text-black py-4 rounded-full font-medium shadow-xl hover:bg-gray-100 transition-all active:scale-95 flex items-center justify-center gap-2"
         >
           {(isVerifying || isUploading) && <Loader2 size={16} className="animate-spin" />}
-          {step === 5 ? (isVerifying || isUploading ? 'Authenticating...' : 'Establish Integrity') : 'Continue'}
+          {step === 5 ? (isVerifying || isUploading ? 'Signing you up...' : 'Join the Community') : 'Continue'}
         </button>
       </div>
     </motion.div>

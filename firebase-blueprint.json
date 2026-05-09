@@ -17,6 +17,7 @@
         "photoURL": { "type": "string" },
         "swipeCount": { "type": "integer" },
         "subscriptionTier": { "type": "string", "enum": ["free", "premium", "executive"] },
+        "interests": { "type": "array", "items": { "type": "string" } },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },
@@ -59,6 +60,19 @@
     "/matches/{matchId}/messages/{messageId}": {
       "schema": "Message",
       "description": "Messages within a match context."
+    },
+    "/reports/{reportId}": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "reporterId": { "type": "string" },
+          "reportedUserId": { "type": "string" },
+          "matchId": { "type": "string" },
+          "reason": { "type": "string" },
+          "createdAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "description": "Safety reports filed by users."
     }
   }
 }
