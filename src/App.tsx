@@ -16,6 +16,7 @@ import Onboarding from './components/profile/Onboarding';
 import Discovery from './components/discovery/Discovery';
 import Matches from './components/chat/Matches';
 import ProfileView from './components/profile/ProfileView';
+import LoginPortal from './components/auth/LoginPortal';
 
 type View = 'discovery' | 'matches' | 'profile' | 'onboarding';
 
@@ -31,14 +32,16 @@ export default function App() {
     const unsubscribe = onAuthStateChanged(auth, async (u) => {
       setUser(u);
       if (u) {
-        // Load profile
+        // Real-time profile sync
         const profileRef = doc(db, 'users', u.uid);
-        const profileSnap = await getDoc(profileRef);
-        if (profileSnap.exists()) {
-          setProfile(profileSnap.data() as UserProfile);
-        } else {
-          setCurrentView('onboarding');
-        }
+        const unsubProfile = onSnapshot(profileRef, (snap) => {
+          if (snap.exists()) {
+            setProfile(snap.data() as UserProfile);
+          } else {
+            setCurrentView('onboarding');
+          }
+        });
+        return () => unsubProfile();
       } else {
         setProfile(null);
       }
@@ -46,19 +49,6 @@ export default function App() {
     });
     return unsubscribe;
   }, []);
-
-  const handleLogin = async () => {
-    if (isLoggingIn) return;
-    setIsLoggingIn(true);
-    const provider = new GoogleAuthProvider();
-    try {
-      await signInWithPopup(auth, provider);
-    } catch (error) {
-      console.error("Login failed", error);
-    } finally {
-      setIsLoggingIn(false);
-    }
-  };
 
   const handleLogout = () => signOut(auth);
 
@@ -83,35 +73,23 @@ export default function App() {
         <motion.div 
           initial={{ y: 20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
-          className="max-w-md w-full text-center space-y-8"
+          className="max-w-md w-full flex flex-col items-center gap-12"
         >
-          <div className="space-y-2">
-            <h1 className="text-6xl font-serif tracking-tight leading-none italic">Veil</h1>
-            <p className="text-[#F27D26] text-xs font-sans uppercase tracking-[0.3em] font-medium">Powered by CFN</p>
+          <div className="space-y-4 text-center">
+            <h1 className="text-8xl font-serif tracking-tighter leading-none italic select-none">Veil</h1>
+            <div className="flex items-center justify-center gap-4 text-[#F27D26]/60">
+              <span className="h-px w-8 bg-current" />
+              <p className="text-[10px] font-sans uppercase tracking-[0.4em] font-medium text-[#F27D26]">Est. 2024</p>
+              <span className="h-px w-8 bg-current" />
+            </div>
           </div>
           
-          <div className="py-12 space-y-4">
-            <h2 className="text-2xl font-light leading-snug">Discreet Dating for established Nigerian Professionals.</h2>
-            <p className="text-sm text-gray-400 leading-relaxed px-8">
-              Absolute discretion. Government ID verification. <br/>
-              Matches based on choices, not exposure.
-            </p>
-          </div>
-
-          <button 
-            onClick={handleLogin}
-            disabled={isLoggingIn}
-            className="w-full bg-white text-black py-4 rounded-full font-medium shadow-2xl hover:bg-gray-200 disabled:opacity-50 transition-all flex items-center justify-center gap-3"
-          >
-            {isLoggingIn ? (
-              <Loader2 className="w-5 h-5 animate-spin" />
-            ) : (
-              <Shield className="w-5 h-5" />
-            )}
-            {isLoggingIn ? 'Authenticating...' : 'Enter Discreetly'}
-          </button>
+          <LoginPortal 
+            onLoginStart={() => setIsLoggingIn(true)} 
+            onLoginEnd={() => setIsLoggingIn(false)}
+          />
           
-          <p className="text-[10px] text-gray-500 uppercase tracking-widest">30+ Professionals Only • NDPA 2023 Compliant</p>
+          <p className="text-[10px] text-gray-700 uppercase tracking-widest font-medium">30+ Professionals Only • NDPA 2023 Compliant</p>
         </motion.div>
       </div>
     );

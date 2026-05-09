@@ -48,11 +48,12 @@ export default function ChatThread({ match, currentUserId, onBack }: ChatThreadP
         model: MODELS.text,
         contents: text,
         config: {
-          systemInstruction: "You are a safety filter for a premium dating app in Nigeria. Analyze the message for signs of: sharing bank details, phone numbers too early, external social handles (Instagram/Telegram), or predatory investment advice. Respond with 'SAFE' or 'WARNING' only.",
+          systemInstruction: "You are a safety filter for a premium dating app in Nigeria. Analyze the message for signs of: sharing bank details, phone numbers too early, external social handles (Instagram/Telegram), or predatory investment advice. Respond with 'SAFE' or 'WARNING' only."
         }
       });
-      return response.text?.includes('WARNING');
+      return response.text?.includes('WARNING') || false;
     } catch (e) {
+      console.error("Gemini Safety Check failed", e);
       return false;
     }
   };

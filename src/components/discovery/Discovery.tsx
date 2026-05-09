@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
-import { collection, query, where, getDocs, doc, setDoc, updateDoc, arrayUnion, serverTimestamp, getDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, setDoc, updateDoc, arrayUnion, serverTimestamp, getDoc, increment } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../../lib/firebase';
 import { UserProfile, Match } from '../../types';
 import { motion, AnimatePresence } from 'motion/react';
-import { Heart, X, MapPin, ShieldCheck, Sparkles, Eye, User as UserIcon } from 'lucide-react';
+import { Heart, X, MapPin, ShieldCheck, Sparkles, Eye, User as UserIcon, Lock, Crown } from 'lucide-react';
 
 interface DiscoveryProps {
   profile: UserProfile;
@@ -14,6 +14,7 @@ export default function Discovery({ profile }: DiscoveryProps) {
   const [loading, setLoading] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [matchResult, setMatchResult] = useState<UserProfile | null>(null);
+  const [showLimitReached, setShowLimitReached] = useState(false);
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -39,6 +40,12 @@ export default function Discovery({ profile }: DiscoveryProps) {
   }, [profile]);
 
   const handleSwipe = async (direction: 'left' | 'right') => {
+    // Check limits for free users
+    if (direction === 'right' && profile.subscriptionTier === 'free' && profile.swipeCount >= 10) {
+      setShowLimitReached(true);
+      return;
+    }
+
     const targetUser = users[currentIndex];
     const matchId = [profile.uid, targetUser.uid].sort().join('_');
     const matchPath = `matches/${matchId}`;
@@ -47,6 +54,12 @@ export default function Discovery({ profile }: DiscoveryProps) {
       if (direction === 'right') {
         const matchRef = doc(db, 'matches', matchId);
         const matchSnap = await getDoc(matchRef);
+
+        // Update current user's swipe count
+        await updateDoc(doc(db, 'users', profile.uid), {
+          swipeCount: increment(1),
+          updatedAt: serverTimestamp()
+        });
 
         if (matchSnap.exists()) {
           const matchData = matchSnap.data() as Match;
@@ -85,14 +98,36 @@ export default function Discovery({ profile }: DiscoveryProps) {
           <h2 className="text-2xl font-serif">Discovery</h2>
           <p className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">Near {profile.neighborhood}</p>
         </div>
-        <div className="p-2 bg-[#F27D26]/10 rounded-lg text-[#F27D26]">
-          <Sparkles size={18} />
+        <div className={`p-2 rounded-lg ${profile.subscriptionTier === 'executive' ? 'bg-purple-500/10 text-purple-400' : 'bg-[#F27D26]/10 text-[#F27D26]'}`}>
+          {profile.subscriptionTier === 'executive' ? <Crown size={18} /> : <Sparkles size={18} />}
         </div>
       </header>
 
       <div className="flex-1 relative">
         <AnimatePresence mode="wait">
-          {currentUserDisplay ? (
+          {showLimitReached ? (
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="absolute inset-0 bg-[#0a0a0a] rounded-[2rem] border border-[#F27D26]/20 flex flex-col items-center justify-center p-8 text-center space-y-6"
+            >
+              <div className="w-16 h-16 rounded-full bg-[#F27D26]/10 flex items-center justify-center text-[#F27D26]">
+                <Lock size={32} />
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-xl font-serif text-white">Daily Limit Reached</h3>
+                <p className="text-xs text-gray-500 leading-relaxed">
+                  As a Standard professional, you have reached your daily interaction limit. Upgrade to maintain your presence without boundaries.
+                </p>
+              </div>
+              <button 
+                onClick={() => setShowLimitReached(false)}
+                className="w-full bg-[#F27D26] text-black py-4 rounded-full font-bold text-xs uppercase tracking-widest shadow-lg shadow-[#F27D26]/20"
+              >
+                Explore Tiers
+              </button>
+            </motion.div>
+          ) : currentUserDisplay ? (
             <motion.div 
               key={currentUserDisplay.uid}
               initial={{ scale: 0.95, opacity: 0 }}
@@ -209,3 +244,4 @@ export default function Discovery({ profile }: DiscoveryProps) {
     </div>
   );
 }
+
