@@ -29,25 +29,37 @@ export default function App() {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   useEffect(() => {
+    let unsubProfile: (() => void) | null = null;
     const unsubscribe = onAuthStateChanged(auth, async (u) => {
       setUser(u);
+      
+      // Cleanup previous profile listener if any
+      if (unsubProfile) {
+        unsubProfile();
+        unsubProfile = null;
+      }
+
       if (u) {
-        // Real-time profile sync
         const profileRef = doc(db, 'users', u.uid);
-        const unsubProfile = onSnapshot(profileRef, (snap) => {
+        unsubProfile = onSnapshot(profileRef, (snap) => {
           if (snap.exists()) {
             setProfile(snap.data() as UserProfile);
           } else {
+            setProfile(null);
             setCurrentView('onboarding');
           }
+          setLoading(false);
         });
-        return () => unsubProfile();
       } else {
         setProfile(null);
+        setLoading(false);
       }
-      setLoading(false);
     });
-    return unsubscribe;
+
+    return () => {
+      unsubscribe();
+      if (unsubProfile) unsubProfile();
+    };
   }, []);
 
   const handleLogout = () => signOut(auth);
@@ -96,10 +108,6 @@ export default function App() {
         </motion.div>
       </div>
     );
-  }
-
-  if (!profile && currentView !== 'onboarding') {
-    setCurrentView('onboarding');
   }
 
   return (

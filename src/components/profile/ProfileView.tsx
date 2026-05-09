@@ -123,9 +123,14 @@ export default function ProfileView({ profile, onLogout }: ProfileViewProps) {
       });
 
       const text = response.text || '[]';
-      const jsonStr = text.replace(/```json|```/g, '').trim();
-      const parsed = JSON.parse(jsonStr);
-      setSuggestions(Array.isArray(parsed) ? parsed : []);
+      try {
+        const jsonStr = text.replace(/```json|```/g, '').trim();
+        const parsed = JSON.parse(jsonStr);
+        setSuggestions(Array.isArray(parsed) ? parsed : []);
+      } catch (parseErr) {
+        console.error("Bio parsing failed", parseErr);
+        setSuggestions([]);
+      }
     } catch (error) {
       console.error("AI Bio generation failed", error);
     } finally {

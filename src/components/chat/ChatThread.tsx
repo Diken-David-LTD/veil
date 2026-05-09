@@ -33,11 +33,15 @@ export default function ChatThread({ match, currentUserId, onBack }: ChatThreadP
       setMessages(newMessages);
 
       // Mark unread messages from other user as read
-      const unread = snap.docs.filter(d => d.data().senderId !== currentUserId && !d.data().isRead);
-      if (unread.length > 0) {
-        unread.forEach(d => {
-          updateDoc(doc(db, `matches/${match.id}/messages`, d.id), { isRead: true });
-        });
+      if (!snap.metadata.hasPendingWrites) {
+        const unread = snap.docs.filter(d => d.data().senderId !== currentUserId && !d.data().isRead);
+        if (unread.length > 0) {
+          const batch = writeBatch(db);
+          unread.forEach(d => {
+            batch.update(doc(db, `matches/${match.id}/messages`, d.id), { isRead: true });
+          });
+          batch.commit().catch(e => console.error("Failed to mark messages as read", e));
+        }
       }
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, `matches/${match.id}/messages`);

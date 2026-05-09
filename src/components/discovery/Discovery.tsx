@@ -5,6 +5,7 @@ import { UserProfile, Match } from '../../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { Heart, X, MapPin, ShieldCheck, Sparkles, Eye, User as UserIcon, Lock, Crown, SlidersHorizontal } from 'lucide-react';
 import { ai, MODELS } from '../../lib/gemini';
+import { calculateAge } from '../../lib/utils';
 
 interface DiscoveryProps {
   profile: UserProfile;
@@ -20,17 +21,6 @@ export default function Discovery({ profile }: DiscoveryProps) {
   const [ageRange, setAgeRange] = useState({ min: 30, max: 55 });
   const [viewMode, setViewMode] = useState<'discovery' | 'likes'>('discovery');
   const [likesMe, setLikesMe] = useState<UserProfile[]>([]);
-
-  const calculateAge = (birthDate: string) => {
-    const birth = new Date(birthDate);
-    const now = new Date();
-    let age = now.getFullYear() - birth.getFullYear();
-    const m = now.getMonth() - birth.getMonth();
-    if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) {
-      age--;
-    }
-    return age;
-  };
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -78,16 +68,21 @@ export default function Discovery({ profile }: DiscoveryProps) {
               }]
             });
 
-            const rankedUids = JSON.parse(response.text?.replace(/```json|```/g, '').trim() || '[]');
-            if (Array.isArray(rankedUids)) {
-              fetched.sort((a, b) => {
-                const indexA = rankedUids.indexOf(a.uid);
-                const indexB = rankedUids.indexOf(b.uid);
-                if (indexA === -1 && indexB === -1) return 0;
-                if (indexA === -1) return 1;
-                if (indexB === -1) return -1;
-                return indexA - indexB;
-              });
+            const text = response.text || '[]';
+            try {
+              const rankedUids = JSON.parse(text.replace(/```json|```/g, '').trim() || '[]');
+              if (Array.isArray(rankedUids)) {
+                fetched.sort((a, b) => {
+                  const indexA = rankedUids.indexOf(a.uid);
+                  const indexB = rankedUids.indexOf(b.uid);
+                  if (indexA === -1 && indexB === -1) return 0;
+                  if (indexA === -1) return 1;
+                  if (indexB === -1) return -1;
+                  return indexA - indexB;
+                });
+              }
+            } catch (err) {
+              console.error("Failed to parse AI ranking", err);
             }
           } catch (aiErr) {
             console.error("AI Ranking failed, falling back to default order", aiErr);

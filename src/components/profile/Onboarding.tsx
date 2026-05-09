@@ -7,6 +7,7 @@ import { UserProfile } from '../../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { MapPin, Calendar, User as UserIcon, ShieldCheck, Sparkles, Loader2, Camera, X, Check } from 'lucide-react';
 import { ai, MODELS } from '../../lib/gemini';
+import { calculateAge } from '../../lib/utils';
 import InterestsPicker from './InterestsPicker';
 
 interface OnboardingProps {
@@ -125,26 +126,30 @@ export default function Onboarding({ user, onComplete }: OnboardingProps) {
           }
         ]
       });
-
       const text = response.text || '{}';
-      const result = JSON.parse(text.replace(/```json|```/g, '').trim());
-      
-      if (!result.isLegit) {
-        setVerificationError(result.reason || "ID document could not be verified. Please ensure it is clear and legible.");
-        return false;
-      }
+      try {
+        const result = JSON.parse(text.replace(/```json|```/g, '').trim());
+        
+        if (!result.isLegit) {
+          setVerificationError(result.reason || "ID document could not be verified. Please ensure it is clear and legible.");
+          return false;
+        }
 
-      if (!result.facesMatch && result.confidence > 0.8) {
-        setVerificationError("Identity mismatch: The profile photo does not seem to match the provided ID.");
-        return false;
-      }
+        if (!result.facesMatch && result.confidence > 0.8) {
+          setVerificationError("Identity mismatch: The profile photo does not seem to match the provided ID.");
+          return false;
+        }
 
-      if (result.detectedGender !== formData.gender && result.detectedGender !== 'none' && result.confidence > 0.8) {
-        setVerificationError(`Integrity check failed: Selected gender (${formData.gender}) does not match ID analysis.`);
-        return false;
-      }
+        if (result.detectedGender !== formData.gender && result.detectedGender !== 'none' && result.confidence > 0.8) {
+          setVerificationError(`Integrity check failed: Selected gender (${formData.gender}) does not match ID analysis.`);
+          return false;
+        }
 
-      return true;
+        return true;
+      } catch (parseError) {
+        console.error("AI Response Parsing failed", parseError);
+        return true; // Fallback
+      }
     } catch (error) {
       console.error("AI Verification failed", error);
       return true; // Proceed to pending review if AI transiently fails
@@ -172,9 +177,14 @@ export default function Onboarding({ user, onComplete }: OnboardingProps) {
       });
 
       const text = response.text || '[]';
-      const jsonStr = text.replace(/```json|```/g, '').trim();
-      const parsed = JSON.parse(jsonStr);
-      setSuggestions(Array.isArray(parsed) ? parsed : []);
+      try {
+        const jsonStr = text.replace(/```json|```/g, '').trim();
+        const parsed = JSON.parse(jsonStr);
+        setSuggestions(Array.isArray(parsed) ? parsed : []);
+      } catch (parseErr) {
+        console.error("Bio parsing failed", parseErr);
+        setSuggestions([]);
+      }
     } catch (error) {
       console.error("Bio generation failed", error);
     } finally {
@@ -195,9 +205,10 @@ export default function Onboarding({ user, onComplete }: OnboardingProps) {
       return;
     }
 
-    const age = new Date().getFullYear() - new Date(formData.birthDate).getFullYear();
+    const age = calculateAge(formData.birthDate);
     if (age < 30) {
-      alert("VEIL is exclusively for those aged 30 and above.");
+      setVerificationError("VEIL is exclusively for those aged 30 and above.");
+      setStep(1);
       return;
     }
 

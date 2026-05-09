@@ -4,12 +4,12 @@ import {
   createUserWithEmailAndPassword, 
   sendPasswordResetEmail,
   GoogleAuthProvider,
-  OAuthProvider,
-  signInWithPopup
+  signInWithPopup,
+  signInAnonymously
 } from 'firebase/auth';
 import { auth } from '../../lib/firebase';
 import { motion, AnimatePresence } from 'motion/react';
-import { Shield, Mail, Lock, Loader2, ArrowRight, ArrowLeft, Key, Check, Apple, Linkedin } from 'lucide-react';
+import { Shield, Mail, Lock, Loader2, ArrowRight, ArrowLeft, Key, Check, UserPlus } from 'lucide-react';
 
 interface LoginPortalProps {
   onLoginStart: () => void;
@@ -26,25 +26,41 @@ export default function LoginPortal({ onLoginStart, onLoginEnd }: LoginPortalPro
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  const handleSocialAuth = async (providerName: 'google' | 'apple' | 'linkedin') => {
+  const handleSocialAuth = async (providerName: 'google') => {
     setLoading(true);
     setError(null);
     onLoginStart();
     
-    let provider;
-    if (providerName === 'google') {
-      provider = new GoogleAuthProvider();
-    } else if (providerName === 'apple') {
-      provider = new OAuthProvider('apple.com');
-    } else {
-      provider = new OAuthProvider('linkedin.com');
-    }
+    const provider = new GoogleAuthProvider();
 
     try {
       await signInWithPopup(auth, provider);
     } catch (err: any) {
       console.error(err);
-      setError(err.message || `Failed to authenticate with ${providerName}`);
+      if (err.code === 'auth/operation-not-allowed') {
+        setError(`Google login is not enabled. Go to Firebase Console > Authentication > Sign-in method and enable it.`);
+      } else {
+        setError(err.message || `Failed to authenticate with Google`);
+      }
+    } finally {
+      setLoading(false);
+      onLoginEnd();
+    }
+  };
+
+  const handleAnonymousAuth = async () => {
+    setLoading(true);
+    setError(null);
+    onLoginStart();
+    try {
+      await signInAnonymously(auth);
+    } catch (err: any) {
+      console.error(err);
+      if (err.code === 'auth/operation-not-allowed') {
+        setError('Anonymous sign-in is not enabled. Go to Firebase Console > Authentication > Sign-in method and enable it.');
+      } else {
+        setError(err.message || 'Failed to sign in anonymously.');
+      }
     } finally {
       setLoading(false);
       onLoginEnd();
@@ -71,8 +87,12 @@ export default function LoginPortal({ onLoginStart, onLoginEnd }: LoginPortalPro
       }
     } catch (err: any) {
       console.error(err);
-      setError(err.message.includes('auth/user-not-found') ? 'Account not found. Please register.' : err.message);
-      if (err.message.includes('auth/user-not-found')) setStep('register');
+      if (err.code === 'auth/operation-not-allowed') {
+        setError('Email/Password login is not enabled in your Firebase Console. Please enable it in Authentication > Sign-in method.');
+      } else {
+        setError(err.message.includes('auth/user-not-found') ? 'Account not found. Please register.' : err.message);
+        if (err.message.includes('auth/user-not-found')) setStep('register');
+      }
     } finally {
       setLoading(false);
       onLoginEnd();
@@ -144,7 +164,7 @@ export default function LoginPortal({ onLoginStart, onLoginEnd }: LoginPortalPro
                 <div className="relative flex justify-center text-[10px] uppercase tracking-widest text-gray-700 font-bold bg-[#0a0a0a] px-4">Social Entry</div>
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 <button 
                   onClick={() => handleSocialAuth('google')}
                   disabled={loading}
@@ -157,22 +177,16 @@ export default function LoginPortal({ onLoginStart, onLoginEnd }: LoginPortalPro
                     <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/>
                     <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
                   </svg>
+                  <span className="ml-2 text-[10px] uppercase tracking-widest font-bold text-gray-400 group-hover:text-white transition-colors">Google</span>
                 </button>
                 <button 
-                  onClick={() => handleSocialAuth('apple')}
+                  onClick={handleAnonymousAuth}
                   disabled={loading}
                   className="flex items-center justify-center p-4 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all group disabled:opacity-50"
-                  title="Apple"
+                  title="Guest Entry"
                 >
-                  <Apple size={20} className="text-gray-400 group-hover:text-white transition-colors" />
-                </button>
-                <button 
-                  onClick={() => handleSocialAuth('linkedin')}
-                  disabled={loading}
-                  className="flex items-center justify-center p-4 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all group disabled:opacity-50"
-                  title="LinkedIn"
-                >
-                  <Linkedin size={20} className="text-gray-400 group-hover:text-white transition-colors" />
+                  <UserPlus size={20} className="text-gray-400 group-hover:text-white transition-colors" />
+                  <span className="ml-2 text-[10px] uppercase tracking-widest font-bold text-gray-400 group-hover:text-white transition-colors">Guest</span>
                 </button>
               </div>
 
