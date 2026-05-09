@@ -15,6 +15,8 @@ export interface UserProfile {
   swipeCount: number;
   subscriptionTier: SubscriptionTier;
   interests?: string[];
+  occupation?: string;
+  blockedUsers?: string[];
   desiredPersona?: string;
   createdAt: any;
   updatedAt: any;

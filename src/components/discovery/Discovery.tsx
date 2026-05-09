@@ -3,9 +3,10 @@ import { collection, query, where, getDocs, doc, setDoc, updateDoc, arrayUnion, 
 import { db, handleFirestoreError, OperationType } from '../../lib/firebase';
 import { UserProfile, Match } from '../../types';
 import { motion, AnimatePresence } from 'motion/react';
-import { Heart, X, MapPin, ShieldCheck, Sparkles, Eye, User as UserIcon, Lock, Crown, SlidersHorizontal } from 'lucide-react';
+import { Heart, X, MapPin, ShieldCheck, Sparkles, Eye, User as UserIcon, Lock, Crown, SlidersHorizontal, Check, AlertCircle } from 'lucide-react';
 import { ai, MODELS } from '../../lib/gemini';
 import { calculateAge } from '../../lib/utils';
+import { REFINED_INTERESTS } from '../profile/InterestsPicker';
 
 interface DiscoveryProps {
   profile: UserProfile;
@@ -16,9 +17,32 @@ export default function Discovery({ profile }: DiscoveryProps) {
   const [loading, setLoading] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [matchResult, setMatchResult] = useState<UserProfile | null>(null);
+  const [aiIntro, setAiIntro] = useState<string | null>(null);
+
+  const isPremium = profile.subscriptionTier === 'premium' || profile.subscriptionTier === 'executive';
+  const currentUserDisplay = users[currentIndex];
+
+  useEffect(() => {
+    const generateAiIntro = async () => {
+      if (!isPremium || !currentUserDisplay) return;
+      
+      try {
+        const response = await ai.models.generateContent({
+          model: MODELS.text,
+          contents: `Our premium user ${profile.displayName} is viewing ${currentUserDisplay.displayName}. ${profile.displayName} is interested in ${profile.interests.join(', ')}. ${currentUserDisplay.displayName} is interested in ${currentUserDisplay.interests.join(', ')}. Generate a one-sentence elite icebreaker about their shared interests. Be extremely classy and brief.`,
+        });
+        setAiIntro(response.text);
+      } catch (err) {
+        console.error("AI Intro failed", err);
+      }
+    };
+    generateAiIntro();
+  }, [currentUserDisplay?.uid, isPremium, profile.displayName, profile.interests]);
   const [showLimitReached, setShowLimitReached] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [ageRange, setAgeRange] = useState({ min: 30, max: 55 });
+  const [verifiedOnly, setVerifiedOnly] = useState(false);
+  const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -35,7 +59,24 @@ export default function Discovery({ profile }: DiscoveryProps) {
           .map(d => d.data() as UserProfile)
           .filter(u => {
             const age = calculateAge(u.birthDate);
-            return u.uid !== profile.uid && age >= ageRange.min && age <= ageRange.max;
+            const matchesAge = u.uid !== profile.uid && age >= ageRange.min && age <= ageRange.max;
+            
+            // Apply Advanced Filters ( respecting subscription tier if needed, 
+            // but usually we let them toggle and then show results or a prompt)
+            
+            // Only apply advanced filters for paying members
+            const isPremium = profile.subscriptionTier === 'premium' || profile.subscriptionTier === 'executive';
+            
+            let matchesFilters = true;
+            if (isPremium) {
+              if (verifiedOnly && !u.isVerified) matchesFilters = false;
+              if (selectedInterests.length > 0) {
+                const sharedInterests = u.interests?.filter(i => selectedInterests.includes(i)) || [];
+                if (sharedInterests.length === 0) matchesFilters = false;
+              }
+            }
+
+            return matchesAge && matchesFilters;
           });
         
         // AI Matchmaking Logic for Premium/Executive Users
@@ -94,7 +135,15 @@ export default function Discovery({ profile }: DiscoveryProps) {
       }
     };
     fetchUsers();
-  }, [profile, ageRange]);
+  }, [profile, ageRange, verifiedOnly, selectedInterests]);
+
+  const toggleInterest = (interest: string) => {
+    if (selectedInterests.includes(interest)) {
+      setSelectedInterests(selectedInterests.filter(i => i !== interest));
+    } else {
+      setSelectedInterests([...selectedInterests, interest]);
+    }
+  };
 
   const handleSwipe = async (direction: 'left' | 'right') => {
     // Check limits for free users
@@ -103,8 +152,7 @@ export default function Discovery({ profile }: DiscoveryProps) {
       return;
     }
 
-    const targetUser = users[currentIndex];
-    const matchId = [profile.uid, targetUser.uid].sort().join('_');
+    const matchId = [profile.uid, currentUserDisplay.uid].sort().join('_');
     const matchPath = `matches/${matchId}`;
 
     try {
@@ -120,17 +168,17 @@ export default function Discovery({ profile }: DiscoveryProps) {
 
         if (matchSnap.exists()) {
           const matchData = matchSnap.data() as Match;
-          if (matchData.likes[targetUser.uid]) {
+          if (matchData.likes[currentUserDisplay.uid]) {
             await updateDoc(matchRef, {
               [`likes.${profile.uid}`]: serverTimestamp(),
               isMutual: true,
               updatedAt: serverTimestamp()
             });
-            setMatchResult(targetUser);
+            setMatchResult(currentUserDisplay);
           }
         } else {
           await setDoc(matchRef, {
-            users: [profile.uid, targetUser.uid],
+            users: [profile.uid, currentUserDisplay.uid],
             likes: { [profile.uid]: serverTimestamp() },
             isMutual: false,
             updatedAt: serverTimestamp()
@@ -141,12 +189,11 @@ export default function Discovery({ profile }: DiscoveryProps) {
       handleFirestoreError(error, OperationType.WRITE, matchPath);
     }
     
-    setCurrentIndex(currentIndex + 1);
+    setAiIntro(null);
+    setCurrentIndex(prev => prev + 1);
   };
 
   if (loading) return null;
-
-  const currentUserDisplay = users[currentIndex];
 
   return (
     <div className="h-full flex flex-col relative px-4 pt-4">
@@ -174,26 +221,99 @@ export default function Discovery({ profile }: DiscoveryProps) {
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            className="mb-6 bg-[#111] rounded-2xl border border-white/5 p-4 overflow-hidden"
+            className="mb-6 bg-[#111] rounded-2xl border border-white/5 p-5 overflow-hidden shadow-2xl"
           >
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <span className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">Age Range Preference</span>
-                <span className="text-xs font-bold text-[#F27D26]">{ageRange.min} - {ageRange.max}</span>
-              </div>
-              <div className="space-y-6 px-2">
-                <input 
-                  type="range" 
-                  min="30" 
-                  max="100" 
-                  value={ageRange.max}
-                  onChange={(e) => setAgeRange(prev => ({ ...prev, max: parseInt(e.target.value) }))}
-                  className="w-full accent-[#F27D26]"
-                />
-                <div className="flex justify-between text-[8px] text-gray-600 uppercase tracking-tighter">
-                  <span>30 Years</span>
-                  <span>Distinguished (100+)</span>
+            <div className="space-y-6">
+              {/* Age Filter */}
+              <div className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <span className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">Age Range Preference</span>
+                  <span className="text-xs font-bold text-[#F27D26]">{ageRange.min} - {ageRange.max}</span>
                 </div>
+                <div className="space-y-4 px-2">
+                  <input 
+                    type="range" 
+                    min="30" 
+                    max="100" 
+                    value={ageRange.max}
+                    onChange={(e) => setAgeRange(prev => ({ ...prev, max: parseInt(e.target.value) }))}
+                    className="w-full accent-[#F27D26]"
+                  />
+                  <div className="flex justify-between text-[8px] text-gray-600 uppercase tracking-tighter">
+                    <span>30 Years</span>
+                    <span>Distinguished (100+)</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Advanced Filters Section */}
+              <div className="pt-4 border-t border-white/5 space-y-6">
+                 {/* Verification Toggle */}
+                 <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                       <span className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">Verified Only</span>
+                       {!isPremium && <Crown size={12} className="text-[#F27D26]" />}
+                    </div>
+                    <button 
+                      onClick={() => isPremium ? setVerifiedOnly(!verifiedOnly) : null}
+                      className={`w-10 h-5 rounded-full transition-all relative ${!isPremium ? 'opacity-50 cursor-not-allowed' : ''} ${verifiedOnly ? 'bg-[#F27D26]' : 'bg-white/10'}`}
+                    >
+                      <motion.div 
+                        initial={false}
+                        animate={{ x: verifiedOnly ? 20 : 2 }}
+                        className="absolute top-1 left-0 w-3 h-3 bg-white rounded-full shadow-sm"
+                      />
+                    </button>
+                 </div>
+
+                 {/* Interests Filter */}
+                 <div className="space-y-4">
+                    <div className="flex justify-between items-center">
+                       <div className="flex items-center gap-2">
+                          <span className="text-[10px] uppercase tracking-widest text-gray-500 font-bold">Interest Filtering</span>
+                          {!isPremium && <Crown size={12} className="text-[#F27D26]" />}
+                       </div>
+                       {selectedInterests.length > 0 && isPremium && (
+                         <button 
+                           onClick={() => setSelectedInterests([])}
+                           className="text-[8px] uppercase tracking-widest text-[#F27D26] font-bold"
+                         >
+                           Reset
+                         </button>
+                       )}
+                    </div>
+                    <div className={`flex flex-wrap gap-2 ${!isPremium ? 'opacity-30 pointer-events-none' : ''}`}>
+                       {REFINED_INTERESTS.slice(0, 8).map(interest => {
+                         const isSelected = selectedInterests.includes(interest);
+                         return (
+                           <button
+                             key={interest}
+                             onClick={() => toggleInterest(interest)}
+                             className={`px-3 py-1.5 rounded-full text-[9px] transition-all border ${
+                               isSelected 
+                                 ? 'bg-[#F27D26] text-black border-[#F27D26]' 
+                                 : 'bg-white/5 text-gray-400 border-white/10 hover:border-white/20'
+                             }`}
+                           >
+                              <div className="flex items-center gap-1.5">
+                                {interest}
+                                {isSelected && <Check size={10} />}
+                              </div>
+                           </button>
+                         )
+                       })}
+                       {REFINED_INTERESTS.length > 8 && <span className="text-[10px] text-gray-600 flex items-center px-2">...</span>}
+                    </div>
+                    
+                    {!isPremium && (
+                      <div className="p-3 bg-[#F27D26]/5 rounded-xl border border-[#F27D26]/10 flex items-center gap-3">
+                         <Crown size={14} className="text-[#F27D26] shrink-0" />
+                         <p className="text-[9px] text-gray-400 leading-tight">
+                           Interest-based targeting and Verified filters are exclusive to <span className="text-[#F27D26] font-bold">Premium</span> members.
+                         </p>
+                      </div>
+                    )}
+                 </div>
               </div>
             </div>
           </motion.div>
@@ -254,34 +374,84 @@ export default function Discovery({ profile }: DiscoveryProps) {
                   </div>
                 )}
 
-                <div className="absolute bottom-0 inset-x-0 p-6 bg-gradient-to-t from-black via-black/60 to-transparent">
-                  <div className="space-y-1">
-                    <h3 className="text-2xl font-semibold flex items-center gap-2">
-                      {currentUserDisplay.displayName}{currentUserDisplay.privacySettings?.showAge !== false ? `, ${new Date().getFullYear() - new Date(currentUserDisplay.birthDate).getFullYear()}` : ''}
-                    </h3>
-                    <div className="flex items-center gap-1 text-gray-400 text-xs text uppercase tracking-widest">
-                       <MapPin size={12} />
-                       {currentUserDisplay.privacySettings?.showNeighborhood !== false ? currentUserDisplay.neighborhood : 'Disclosed on Match'}
+                <div className="absolute inset-x-0 bottom-0 p-6 bg-gradient-to-t from-black via-black/60 to-transparent">
+                  <div className="flex justify-between items-start">
+                    <div className="space-y-1">
+                      <h3 className="text-2xl font-semibold flex items-center gap-2">
+                        {currentUserDisplay.displayName}{currentUserDisplay.privacySettings?.showAge !== false ? `, ${new Date().getFullYear() - new Date(currentUserDisplay.birthDate).getFullYear()}` : ''}
+                      </h3>
+                      <div className="flex items-center gap-1 text-gray-400 text-xs text uppercase tracking-widest font-medium">
+                         <MapPin size={10} />
+                         {currentUserDisplay.privacySettings?.showNeighborhood !== false ? currentUserDisplay.neighborhood : 'Disclosed on Match'}
+                      </div>
                     </div>
+                    
+                    {/* Compatibility Score */}
+                    {profile.interests && currentUserDisplay.interests && (
+                      <div className="bg-[#F27D26]/20 backdrop-blur-md px-3 py-2 rounded-2xl border border-[#F27D26]/30 flex flex-col items-center min-w-[50px]">
+                        <span className="text-[10px] text-[#F27D26] font-bold leading-none mb-1">Match</span>
+                        <span className="text-lg font-serif text-white leading-none">
+                          {Math.round((currentUserDisplay.interests.filter(i => profile.interests.includes(i)).length / REFINED_INTERESTS.length) * 100 + 40)}%
+                        </span>
+                      </div>
+                    )}
                   </div>
+                  
                   <p className="mt-3 text-sm text-gray-300 line-clamp-2 leading-relaxed italic opacity-80">
                     "{currentUserDisplay.privacySettings?.showBio !== false ? (currentUserDisplay.bio || 'Saying hello from Lagos.') : 'Keeping things private for now.'}"
                   </p>
+
+                  {/* AI Icebreaker */}
+                  {aiIntro && (
+                    <motion.div 
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="mt-4 p-3 bg-[#F27D26]/10 border border-[#F27D26]/20 rounded-xl"
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <Sparkles size={10} className="text-[#F27D26]" />
+                        <span className="text-[8px] uppercase tracking-widest text-[#F27D26] font-bold">Elite Icebreaker</span>
+                      </div>
+                      <p className="text-[10px] text-white/80 leading-relaxed italic">"{aiIntro}"</p>
+                    </motion.div>
+                  )}
+                  
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {currentUserDisplay.interests?.slice(0, 3).map(i => (
+                      <span key={i} className="text-[8px] uppercase tracking-widest bg-white/5 px-2 py-1 rounded-full border border-white/10 text-gray-400">
+                        {i}
+                      </span>
+                    ))}
+                  </div>
                 </div>
               </div>
 
               <div className="p-6 flex justify-around items-center bg-black/40">
                 <button 
                   onClick={() => handleSwipe('left')}
-                  className="w-16 h-16 rounded-full border border-white/10 flex items-center justify-center text-gray-400 hover:bg-white/5 transition-all"
+                  className="w-14 h-14 rounded-full border border-white/10 flex items-center justify-center text-gray-500 hover:bg-white/5 transition-all"
+                  title="Dismiss"
                 >
-                  <X size={24} />
+                  <X size={20} />
                 </button>
                 <button 
                   onClick={() => handleSwipe('right')}
                   className="w-16 h-16 rounded-full bg-white text-black flex items-center justify-center shadow-xl hover:scale-105 active:scale-95 transition-all"
+                  title="Interested"
                 >
                   <Heart size={24} fill="currentColor" />
+                </button>
+                <button 
+                  onClick={() => {
+                    if (window.confirm('Report this profile for community integrity review?')) {
+                      window.alert('Profile reported. Our refinement team will investigate within 24 hours.');
+                      handleSwipe('left');
+                    }
+                  }}
+                  className="w-14 h-14 rounded-full border border-white/10 flex items-center justify-center text-gray-700 hover:bg-red-500/10 hover:text-red-500/60 transition-all"
+                  title="Report"
+                >
+                  <AlertCircle size={20} />
                 </button>
               </div>
             </motion.div>

@@ -2,7 +2,7 @@ import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Check } from 'lucide-react';
 
-const REFINED_INTERESTS = [
+export const REFINED_INTERESTS = [
   'Fine Dining', 'Art Collecting', 'Angel Investing', 'Sailing', 
   'Polo', 'Golf', 'Philanthropy', 'Wine Tasting', 'VC',
   'Classical Music', 'Boutique Hotels', 'Horse Racing',

@@ -1,8 +1,8 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { Eye, Heart, MessageSquare, User } from 'lucide-react';
+import { Eye, Heart, MessageSquare, LayoutGrid } from 'lucide-react';
 
-export type ViewType = 'discovery' | 'activity' | 'messages' | 'profile';
+export type ViewType = 'dashboard' | 'discovery' | 'activity' | 'messages';
 
 interface NavigationProps {
   currentView: ViewType;
@@ -13,33 +13,33 @@ interface NavigationProps {
 
 export default function Navigation({ currentView, onViewChange, hasNewActivity, unreadCount }: NavigationProps) {
   return (
-    <nav className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[90%] max-w-sm bg-white/10 backdrop-blur-xl border border-white/10 rounded-full h-16 flex items-center justify-around px-2 z-50 shadow-2xl">
+    <nav className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[92%] max-w-sm bg-white/5 backdrop-blur-2xl border border-white/10 rounded-[2rem] h-16 flex items-center justify-around px-2 z-50 shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
+      <NavBtn 
+        active={currentView === 'dashboard'} 
+        onClick={() => onViewChange('dashboard')} 
+        icon={<LayoutGrid size={20}/>} 
+        label="Home" 
+      />
       <NavBtn 
         active={currentView === 'discovery'} 
         onClick={() => onViewChange('discovery')} 
         icon={<Eye size={20}/>} 
-        label="Discover" 
+        label="Refine" 
       />
       <NavBtn 
         active={currentView === 'activity'} 
         onClick={() => onViewChange('activity')} 
         icon={<Heart size={20}/>} 
-        label="Activity" 
+        label="Pulse" 
         badge={hasNewActivity}
       />
       <NavBtn 
         active={currentView === 'messages'} 
         onClick={() => onViewChange('messages')} 
         icon={<MessageSquare size={20}/>} 
-        label="Messages" 
+        label="Chat" 
         badge={unreadCount ? unreadCount > 0 : false}
         count={unreadCount}
-      />
-      <NavBtn 
-        active={currentView === 'profile'} 
-        onClick={() => onViewChange('profile')} 
-        icon={<User size={20}/>} 
-        label="Account" 
       />
     </nav>
   );

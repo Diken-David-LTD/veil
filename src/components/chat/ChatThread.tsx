@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, updateDoc, writeBatch, where, getDocs } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, updateDoc, writeBatch, where, getDocs, arrayUnion } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../../lib/firebase';
 import { Match, Message } from '../../types';
 import { motion, AnimatePresence } from 'motion/react';
@@ -70,6 +70,19 @@ export default function ChatThread({ match, currentUserId, onBack }: ChatThreadP
     } catch (e) {
       console.error("Safety Check failed", e);
       return false;
+    }
+  };
+
+  const handleBlock = async () => {
+    if (!otherUser || !window.confirm('Block this user? You will no longer see each other.')) return;
+    try {
+      await updateDoc(doc(db, 'users', currentUserId), {
+        blockedUsers: arrayUnion(otherUser.uid)
+      });
+      alert("User blocked. Absolute discretion has been applied.");
+      onBack();
+    } catch (error) {
+      console.error("Block failed", error);
     }
   };
 
@@ -177,7 +190,7 @@ export default function ChatThread({ match, currentUserId, onBack }: ChatThreadP
                     <ShieldAlert size={14} /> Unprofessional Conduct
                   </button>
                   <button 
-                    onClick={() => alert("User blocked. They will no longer see your presence.")}
+                    onClick={handleBlock}
                     className="w-full px-4 py-3 text-left text-xs flex items-center gap-3 hover:bg-white/5 transition-all text-gray-400"
                   >
                     <Ban size={14} /> Block Profile
@@ -197,12 +210,26 @@ export default function ChatThread({ match, currentUserId, onBack }: ChatThreadP
             animate={{ opacity: 1, y: 0 }}
             className={`flex ${m.senderId === currentUserId ? 'justify-end' : 'justify-start'}`}
           >
-            <div className={`max-w-[80%] p-3 rounded-2xl text-sm ${
-              m.senderId === currentUserId 
-                ? 'bg-white text-black rounded-tr-none' 
-                : 'bg-[#111] text-white rounded-tl-none border border-white/5'
-            }`}>
-              {m.text}
+            <div className="flex flex-col gap-1 items-end">
+              <div className={`max-w-[80%] p-3 rounded-2xl text-sm ${
+                m.senderId === currentUserId 
+                  ? 'bg-white text-black rounded-tr-none' 
+                  : 'bg-[#111] text-white rounded-tl-none border border-white/5'
+              }`}>
+                {m.text}
+              </div>
+              {m.senderId === currentUserId && (
+                <div className="flex items-center gap-1 mt-1 px-1">
+                  <span className="text-[9px] text-gray-600">
+                    {m.createdAt?.toDate ? m.createdAt.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                  </span>
+                  {m.isRead ? (
+                    <BadgeCheck size={10} className="text-[#F27D26]" />
+                  ) : (
+                    <BadgeCheck size={10} className="text-gray-700" />
+                  )}
+                </div>
+              )}
             </div>
           </motion.div>
         ))}

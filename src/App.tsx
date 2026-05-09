@@ -13,6 +13,7 @@ import { Shield, Eye, Heart, MessageSquare, User as UserIcon, LogOut, Loader2, M
 
 // Components (will be created)
 import Onboarding from './components/profile/Onboarding';
+import Dashboard from './components/dashboard/Dashboard';
 import Discovery from './components/discovery/Discovery';
 import LikesView from './components/discovery/LikesView';
 import Matches from './components/chat/Matches';
@@ -24,7 +25,7 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [currentView, setCurrentView] = useState<ViewType | 'onboarding'>('discovery');
+  const [currentView, setCurrentView] = useState<ViewType | 'onboarding' | 'profile'>('dashboard');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [isChatting, setIsChatting] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -177,9 +178,21 @@ export default function App() {
                   user={user!} 
                   onComplete={(newProfile) => {
                     setProfile(newProfile);
-                    setCurrentView('discovery');
+                    setCurrentView('dashboard');
                   }} 
                 />
+              </motion.div>
+            )}
+
+            {currentView === 'dashboard' && (
+              <motion.div 
+                key="dashboard"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="h-full"
+              >
+                <Dashboard profile={profile!} onNavigate={(view) => setCurrentView(view)} />
               </motion.div>
             )}
 

@@ -6,7 +6,8 @@ import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage, handleFirestoreError, OperationType } from '../../lib/firebase';
 import { ai, MODELS } from '../../lib/gemini';
-import InterestsPicker from './InterestsPicker';
+import InterestsPicker, { REFINED_INTERESTS } from './InterestsPicker';
+import { calculateAge } from '../../lib/utils';
 
 interface ProfileViewProps {
   profile: UserProfile;
@@ -39,6 +40,7 @@ export default function ProfileView({ profile, onLogout }: ProfileViewProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [showPrivacySettings, setShowPrivacySettings] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
   const [isEditingBio, setIsEditingBio] = useState(false);
   const [isEditingInterests, setIsEditingInterests] = useState(false);
   const [tempBio, setTempBio] = useState(profile.bio || '');
@@ -430,6 +432,15 @@ export default function ProfileView({ profile, onLogout }: ProfileViewProps) {
                 </motion.div>
               )}
             </AnimatePresence>
+
+            {/* Preview Button */}
+            <button 
+              onClick={() => setShowPreview(true)}
+              className="w-full mt-4 flex items-center justify-center gap-2 py-3 bg-white/5 border border-white/10 rounded-xl text-[10px] uppercase tracking-widest font-bold text-gray-400 hover:text-white hover:bg-white/10 transition-all"
+            >
+              <ShieldCheck size={14} className="text-[#F27D26]" />
+              View My Profile as Others See It
+            </button>
          </section>
 
          <section className="bg-[#111] rounded-2xl p-4 border border-white/5 space-y-4">
@@ -509,6 +520,106 @@ export default function ProfileView({ profile, onLogout }: ProfileViewProps) {
                   ))}
                 </div>
              </motion.div>
+           </motion.div>
+         )}
+       </AnimatePresence>
+
+       {/* Profile Preview Modal */}
+       <AnimatePresence>
+         {showPreview && (
+           <motion.div 
+             initial={{ opacity: 0 }}
+             animate={{ opacity: 1 }}
+             exit={{ opacity: 0 }}
+             className="fixed inset-0 z-[110] bg-black/95 backdrop-blur-2xl flex flex-col items-center justify-center p-6"
+           >
+             <div className="w-full max-w-sm flex justify-between items-center mb-6">
+               <div>
+                  <h2 className="text-xl font-serif text-white">Public Presence</h2>
+                  <p className="text-[10px] uppercase tracking-widest text-[#F27D26] font-bold">Absolute Discretion Mode</p>
+               </div>
+               <button 
+                 onClick={() => setShowPreview(false)}
+                 className="p-2 bg-white/5 rounded-full text-gray-500 hover:text-white transition-colors"
+               >
+                 <CloseIcon size={24} />
+               </button>
+             </div>
+
+             {/* The Card View (matching Discovery.tsx) */}
+             <div className="w-full max-w-sm aspect-[4/5] bg-[#111] rounded-[3rem] overflow-hidden border border-white/10 flex flex-col shadow-2xl relative">
+               <div className="relative flex-1 bg-gradient-to-b from-gray-800 to-black">
+                 {profile.photoURL ? (
+                    <img 
+                      src={profile.photoURL} 
+                      className="w-full h-full object-cover opacity-80" 
+                      alt="Me"
+                      referrerPolicy="no-referrer"
+                    />
+                 ) : (
+                   <div className="w-full h-full flex items-center justify-center bg-[#181818]">
+                     <ShieldCheck size={80} className="opacity-10" />
+                   </div>
+                 )}
+                 
+                 {profile.isVerified && (
+                   <div className="absolute top-4 right-4 bg-white/10 backdrop-blur-md px-3 py-1 rounded-full flex items-center gap-1 border border-white/20">
+                     <BadgeCheck size={12} className="text-[#F27D26]" />
+                     <span className="text-[10px] uppercase tracking-widest font-bold">Verified</span>
+                   </div>
+                 )}
+
+                 <div className="absolute inset-x-0 bottom-0 p-6 bg-gradient-to-t from-black via-black/60 to-transparent">
+                   <div className="space-y-1">
+                     <h3 className="text-2xl font-semibold flex items-center gap-2">
+                       {profile.displayName}
+                       {profile.privacySettings?.showAge !== false ? `, ${calculateAge(profile.birthDate)}` : ''}
+                     </h3>
+                     <div className="flex items-center gap-1 text-gray-400 text-xs text uppercase tracking-widest font-medium">
+                        <MapPin size={10} />
+                        {profile.privacySettings?.showNeighborhood !== false ? profile.neighborhood : 'Disclosed on Match'}
+                     </div>
+                   </div>
+                   
+                   <p className="mt-4 text-sm text-gray-300 line-clamp-3 leading-relaxed italic opacity-80">
+                     "{profile.privacySettings?.showBio !== false ? (profile.bio || 'Saying hello from Lagos.') : 'Keeping things private for now.'}"
+                   </p>
+
+                   <div className="mt-6 flex flex-wrap gap-2">
+                     {profile.privacySettings?.showInterests !== false && profile.interests ? (
+                       profile.interests.slice(0, 3).map(i => (
+                         <span key={i} className="text-[8px] uppercase tracking-widest bg-white/5 px-2 py-1 rounded-full border border-white/10 text-gray-400">
+                           {i}
+                         </span>
+                       ))
+                     ) : (
+                       <span className="text-[8px] uppercase tracking-widest bg-white/5 px-2 py-1 rounded-full border border-white/10 text-[#F27D26]">
+                         Interests Disclosed on Match
+                       </span>
+                     )}
+                   </div>
+                 </div>
+               </div>
+
+               <div className="p-8 flex justify-around items-center bg-black/40">
+                 <div className="w-12 h-12 rounded-full border border-white/5 flex items-center justify-center text-gray-800">
+                   <CloseIcon size={20} />
+                 </div>
+                 <div className="w-14 h-14 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-white/20">
+                   <Heart size={24} fill="currentColor" />
+                 </div>
+                 <div className="w-12 h-12 rounded-full border border-white/5 flex items-center justify-center text-gray-800">
+                   <ShieldCheck size={20} />
+                 </div>
+               </div>
+             </div>
+             
+             <div className="mt-10 p-4 bg-[#F27D26]/5 rounded-2xl border border-[#F27D26]/10 max-w-sm text-center">
+               <p className="text-[10px] text-gray-500 leading-relaxed">
+                 This is exactly how you appear in the Discovery circle. Adjust your 
+                 <span className="text-[#F27D26] font-bold"> Privacy Controls</span> to refine your public presence.
+               </p>
+             </div>
            </motion.div>
          )}
        </AnimatePresence>
