@@ -14,26 +14,72 @@ import { Shield, Eye, Heart, MessageSquare, User as UserIcon, LogOut, Loader2, M
 // Components (will be created)
 import Onboarding from './components/profile/Onboarding';
 import Discovery from './components/discovery/Discovery';
+import LikesView from './components/discovery/LikesView';
 import Matches from './components/chat/Matches';
 import ProfileView from './components/profile/ProfileView';
 import LoginPortal from './components/auth/LoginPortal';
-
-type View = 'discovery' | 'matches' | 'profile' | 'onboarding';
+import Navigation, { ViewType } from './components/layout/Navigation';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [currentView, setCurrentView] = useState<View>('discovery');
-
+  const [currentView, setCurrentView] = useState<ViewType | 'onboarding'>('discovery');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [isChatting, setIsChatting] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [hasNewActivity, setHasNewActivity] = useState(false);
+
+  useEffect(() => {
+    if (!profile) return;
+
+    // Listen for unread messages across all matches
+    const matchesQ = query(
+      collection(db, 'matches'),
+      where('users', 'array-contains', profile.uid),
+      where('isMutual', '==', true)
+    );
+
+    const unsubMatches = onSnapshot(matchesQ, async (snap) => {
+      let totalUnread = 0;
+      for (const matchDoc of snap.docs) {
+        const messagesQ = query(
+          collection(db, `matches/${matchDoc.id}/messages`),
+          where('senderId', '!=', profile.uid),
+          where('isRead', '==', false)
+        );
+        const messagesSnap = await getDocs(messagesQ);
+        totalUnread += messagesSnap.size;
+      }
+      setUnreadCount(totalUnread);
+    });
+
+    // Listen for new likes (Activity)
+    const likesQ = query(
+      collection(db, 'matches'),
+      where('users', 'array-contains', profile.uid),
+      where('isMutual', '==', false)
+    );
+
+    const unsubLikes = onSnapshot(likesQ, (snap) => {
+      const pendingLikes = snap.docs.filter(d => {
+        const data = d.data();
+        return data.likes && !data.likes[profile.uid];
+      });
+      setHasNewActivity(pendingLikes.length > 0);
+    });
+
+    return () => {
+      unsubMatches();
+      unsubLikes();
+    };
+  }, [profile]);
 
   useEffect(() => {
     let unsubProfile: (() => void) | null = null;
     const unsubscribe = onAuthStateChanged(auth, async (u) => {
       setUser(u);
       
-      // Cleanup previous profile listener if any
       if (unsubProfile) {
         unsubProfile();
         unsubProfile = null;
@@ -43,7 +89,11 @@ export default function App() {
         const profileRef = doc(db, 'users', u.uid);
         unsubProfile = onSnapshot(profileRef, (snap) => {
           if (snap.exists()) {
-            setProfile(snap.data() as UserProfile);
+            const data = snap.data() as UserProfile;
+            setProfile(data);
+            if (currentView === 'onboarding') {
+              setCurrentView('discovery');
+            }
           } else {
             setProfile(null);
             setCurrentView('onboarding');
@@ -60,7 +110,7 @@ export default function App() {
       unsubscribe();
       if (unsubProfile) unsubProfile();
     };
-  }, []);
+  }, [currentView]);
 
   const handleLogout = () => signOut(auth);
 
@@ -111,57 +161,90 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-[#050505] text-white font-sans selection:bg-[#F27D26] selection:text-white pb-20">
-      <main className="max-w-md mx-auto h-screen relative overflow-hidden flex flex-col">
-        {/* View Switcher */}
-        <AnimatePresence mode="wait">
-          {currentView === 'onboarding' && (
-            <Onboarding 
-              user={user} 
-              onComplete={(newProfile) => {
-                setProfile(newProfile);
-                setCurrentView('discovery');
-              }} 
-            />
-          )}
+    <div className="min-h-screen bg-[#050505] text-white font-sans selection:bg-[#F27D26] selection:text-white">
+      <main className="max-w-md mx-auto h-[100dvh] relative overflow-hidden flex flex-col">
+        <div className="flex-1 relative overflow-hidden">
+          <AnimatePresence mode="wait">
+            {currentView === 'onboarding' && (
+              <motion.div
+                key="onboarding"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="h-full"
+              >
+                <Onboarding 
+                  user={user!} 
+                  onComplete={(newProfile) => {
+                    setProfile(newProfile);
+                    setCurrentView('discovery');
+                  }} 
+                />
+              </motion.div>
+            )}
 
-          {currentView === 'discovery' && (
-            <Discovery profile={profile!} />
-          )}
+            {currentView === 'discovery' && (
+              <motion.div 
+                key="discovery"
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 10 }}
+                className="h-full"
+              >
+                <Discovery profile={profile!} />
+              </motion.div>
+            )}
 
-          {currentView === 'matches' && (
-            <Matches profile={profile!} />
-          )}
+            {currentView === 'activity' && (
+              <motion.div 
+                key="activity"
+                initial={{ opacity: 0, scale: 0.98 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 1.02 }}
+                className="h-full"
+              >
+                <LikesView 
+                  profile={profile!} 
+                  onViewProfile={() => setCurrentView('discovery')}
+                />
+              </motion.div>
+            )}
 
-          {currentView === 'profile' && (
-            <ProfileView profile={profile!} onLogout={handleLogout} />
-          )}
-        </AnimatePresence>
+            {currentView === 'messages' && (
+              <motion.div 
+                key="messages"
+                initial={{ opacity: 0, x: 10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                className="h-full"
+              >
+                <Matches profile={profile!} onChatStateChange={setIsChatting} />
+              </motion.div>
+            )}
 
-        {/* Global Navigation - Recipe 4 style bottom pill nav */}
-        {profile && (
-          <nav className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[90%] max-w-sm bg-white/10 backdrop-blur-xl border border-white/10 rounded-full h-16 flex items-center justify-around px-2 z-50">
-            <NavBtn active={currentView === 'discovery'} onClick={() => setCurrentView('discovery')} icon={<Eye size={20}/>} label="Discovery" />
-            <NavBtn active={currentView === 'matches'} onClick={() => setCurrentView('matches')} icon={<MessageSquare size={20}/>} label="Matches" />
-            <NavBtn active={currentView === 'profile'} onClick={() => setCurrentView('profile')} icon={<UserIcon size={20}/>} label="Account" />
-          </nav>
+            {currentView === 'profile' && (
+              <motion.div 
+                key="profile"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="h-full"
+              >
+                <ProfileView profile={profile!} onLogout={handleLogout} />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {profile && !isChatting && currentView !== 'onboarding' && (
+          <Navigation 
+            currentView={currentView as ViewType} 
+            onViewChange={(view) => setCurrentView(view)} 
+            unreadCount={unreadCount}
+            hasNewActivity={hasNewActivity}
+          />
         )}
       </main>
     </div>
-  );
-}
-
-function NavBtn({ active, onClick, icon, label }: { active: boolean, onClick: () => void, icon: any, label: string }) {
-  return (
-    <button 
-      onClick={onClick}
-      className={`flex flex-col items-center justify-center gap-1 transition-all ${active ? 'text-[#F27D26]' : 'text-gray-400 opacity-60 hover:opacity-100'}`}
-    >
-      <div className={`p-2 rounded-full ${active ? 'bg-[#F27D26]/10' : ''}`}>
-        {icon}
-      </div>
-      <span className="text-[8px] uppercase tracking-[0.2em] font-bold">{label}</span>
-      {active && <motion.div layoutId="nav-dot" className="w-1 h-1 rounded-full bg-[#F27D26] absolute -top-1" />}
-    </button>
   );
 }

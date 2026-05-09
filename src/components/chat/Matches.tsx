@@ -8,12 +8,17 @@ import ChatThread from './ChatThread';
 
 interface MatchesProps {
   profile: UserProfile;
+  onChatStateChange?: (isChatting: boolean) => void;
 }
 
-export default function Matches({ profile }: MatchesProps) {
+export default function Matches({ profile, onChatStateChange }: MatchesProps) {
   const [matches, setMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
+
+  useEffect(() => {
+    onChatStateChange?.(selectedMatch !== null);
+  }, [selectedMatch, onChatStateChange]);
 
   useEffect(() => {
     const q = query(
