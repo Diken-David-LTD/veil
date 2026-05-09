@@ -18,6 +18,8 @@ export default function ChatThread({ match, currentUserId, onBack }: ChatThreadP
   const [isScamWarning, setIsScamWarning] = useState(false);
   const [showOptions, setShowOptions] = useState(false);
   const [isReporting, setIsReporting] = useState(false);
+  const [reportReason, setReportReason] = useState<string | null>(null);
+  const [customReason, setCustomReason] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
   const otherUser = match.participants?.find(p => p.uid !== currentUserId);
   const currentUserProfile = match.participants?.find(p => p.uid === currentUserId);
@@ -99,6 +101,8 @@ export default function ChatThread({ match, currentUserId, onBack }: ChatThreadP
       });
       alert("Report submitted. Our concierge team will review this discreetly.");
       setShowOptions(false);
+      setReportReason(null);
+      setCustomReason('');
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, 'reports');
     } finally {
@@ -178,20 +182,26 @@ export default function ChatThread({ match, currentUserId, onBack }: ChatThreadP
                   className="absolute right-0 top-full mt-2 w-48 bg-[#111] border border-white/10 rounded-xl overflow-hidden shadow-2xl z-10"
                 >
                   <button 
-                    onClick={() => handleReport('Spam/Scam')}
+                    onClick={() => setReportReason('discretion')}
                     className="w-full px-4 py-3 text-left text-xs flex items-center gap-3 hover:bg-white/5 transition-all text-red-500"
                   >
                     <Flag size={14} /> Report Discretion Breach
                   </button>
                   <button 
-                    onClick={() => handleReport('Harassment')}
+                    onClick={() => setReportReason('conduct')}
                     className="w-full px-4 py-3 text-left text-xs flex items-center gap-3 hover:bg-white/5 transition-all text-red-500"
                   >
                     <ShieldAlert size={14} /> Unprofessional Conduct
                   </button>
                   <button 
-                    onClick={handleBlock}
+                    onClick={() => setReportReason('other')}
                     className="w-full px-4 py-3 text-left text-xs flex items-center gap-3 hover:bg-white/5 transition-all text-gray-400"
+                  >
+                    <CircleAlert size={14} /> Other Concern
+                  </button>
+                  <button 
+                    onClick={handleBlock}
+                    className="w-full px-4 py-3 text-left text-xs flex items-center gap-3 hover:bg-white/5 transition-all text-gray-400 border-t border-white/5"
                   >
                     <Ban size={14} /> Block Profile
                   </button>
@@ -201,6 +211,52 @@ export default function ChatThread({ match, currentUserId, onBack }: ChatThreadP
           </AnimatePresence>
         </div>
       </header>
+
+      {/* Report Modal */}
+      <AnimatePresence>
+        {reportReason && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm flex items-center justify-center p-6"
+          >
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="w-full max-w-sm bg-[#111] border border-white/10 rounded-3xl p-6 shadow-2xl"
+            >
+              <h3 className="text-lg font-serif text-white mb-2">Internal Report</h3>
+              <p className="text-xs text-gray-500 mb-6 font-medium tracking-wide">
+                Please provide details regarding your concern with {otherUser?.displayName}.
+              </p>
+
+              <textarea 
+                value={customReason}
+                onChange={e => setCustomReason(e.target.value)}
+                placeholder="What occurred? Be as specific as possible..."
+                className="w-full bg-black border border-white/10 rounded-xl p-4 text-sm text-white h-32 outline-none focus:border-[#F27D26] transition-all mb-6 resize-none"
+              />
+
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => setReportReason(null)}
+                  className="flex-1 py-3 text-xs font-bold uppercase tracking-widest text-gray-500 hover:text-white transition-all"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={() => handleReport(`${reportReason}: ${customReason}`)}
+                  disabled={isReporting || !customReason.trim()}
+                  className="flex-1 py-3 bg-red-500/10 text-red-500 text-xs font-bold uppercase tracking-widest rounded-xl hover:bg-red-500 hover:text-white transition-all disabled:opacity-30"
+                >
+                  {isReporting ? 'Submitting...' : 'File Report'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.map((m, i) => (

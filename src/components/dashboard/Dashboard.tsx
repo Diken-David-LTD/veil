@@ -11,7 +11,9 @@ import {
   TrendingUp, 
   AlertCircle,
   Clock,
-  ArrowRight
+  ArrowRight,
+  Camera,
+  CheckCircle2
 } from 'lucide-react';
 import { UserProfile, Match } from '../../types';
 import { collection, query, where, getDocs, limit, orderBy } from 'firebase/firestore';
@@ -67,6 +69,27 @@ export default function Dashboard({ profile, onNavigate }: DashboardProps) {
     profile.occupation
   ].filter(Boolean).length * 20;
 
+  const nextSteps = [
+    { 
+      condition: !profile.photoURL, 
+      label: 'Update Presence', 
+      sub: 'Add a photo to activate Discovery.',
+      icon: <Camera size={14} className="text-[#F27D26]" /> 
+    },
+    { 
+      condition: !profile.isVerified, 
+      label: 'Verify Identity', 
+      sub: 'Gain the Elite Trust badge.',
+      icon: <CheckCircle2 size={14} className="text-[#F27D26]" /> 
+    },
+    { 
+      condition: !profile.bio || profile.bio.length < 10, 
+      label: 'Refine Bio', 
+      sub: 'Introduce yourself to the circle.',
+      icon: <Zap size={14} className="text-[#F27D26]" /> 
+    }
+  ].filter(step => step.condition);
+
   return (
     <div className="h-full overflow-y-auto px-6 pt-6 pb-32 space-y-8 scrollbar-hide">
       {/* Profile Summary Header */}
@@ -116,11 +139,39 @@ export default function Dashboard({ profile, onNavigate }: DashboardProps) {
           </div>
           {profileCompletion < 100 && (
             <p className="text-[10px] text-gray-500 leading-relaxed italic">
-              "A fully detailed profile receives 3x more refined interests. Add your refined hobbies to standout."
+              "A fully detailed profile receives 3x more refined interests."
             </p>
           )}
         </div>
       </section>
+
+      {/* Next Steps for New Members */}
+      {nextSteps.length > 0 && (
+        <section className="space-y-4">
+          <h3 className="text-[10px] uppercase tracking-[0.2em] text-gray-500 font-bold ml-1">Arrival Tasks</h3>
+          <div className="space-y-3">
+            {nextSteps.map((step, i) => (
+              <motion.button
+                key={step.label}
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: i * 0.1 }}
+                onClick={() => onNavigate('profile')}
+                className="w-full bg-gradient-to-r from-[#F27D26]/10 to-transparent p-4 rounded-2xl border border-[#F27D26]/20 flex items-center gap-4 group"
+              >
+                <div className="w-10 h-10 rounded-xl bg-black/40 flex items-center justify-center">
+                  {step.icon}
+                </div>
+                <div className="text-left">
+                  <p className="text-xs font-bold text-white uppercase tracking-wider">{step.label}</p>
+                  <p className="text-[10px] text-gray-500 mt-0.5">{step.sub}</p>
+                </div>
+                <ArrowRight size={14} className="ml-auto text-[#F27D26] opacity-0 group-hover:opacity-100 transition-all transform translate-x-[-10px] group-hover:translate-x-0" />
+              </motion.button>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Grid Stats */}
       <div className="grid grid-cols-2 gap-4">

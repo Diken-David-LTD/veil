@@ -103,5 +103,15 @@ service cloud.firestore {
           && incoming().text is string && incoming().text.size() <= 1000;
       }
     }
+
+    // Reports
+    match /reports/{reportId} {
+      allow create: if isSignedIn() 
+        && incoming().reporterId == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().reason is string && incoming().reason.size() <= 500
+        && incoming().reportedUserId is string
+        && incoming().matchId is string;
+    }
   }
 }

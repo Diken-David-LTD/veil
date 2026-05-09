@@ -20,6 +20,7 @@ import Matches from './components/chat/Matches';
 import ProfileView from './components/profile/ProfileView';
 import LoginPortal from './components/auth/LoginPortal';
 import Navigation, { ViewType } from './components/layout/Navigation';
+import WelcomeInterstitial from './components/discovery/WelcomeInterstitial';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -30,6 +31,7 @@ export default function App() {
   const [isChatting, setIsChatting] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [hasNewActivity, setHasNewActivity] = useState(false);
+  const [showWelcome, setShowWelcome] = useState(false);
 
   useEffect(() => {
     if (!profile) return;
@@ -178,6 +180,7 @@ export default function App() {
                   user={user!} 
                   onComplete={(newProfile) => {
                     setProfile(newProfile);
+                    setShowWelcome(true);
                     setCurrentView('dashboard');
                   }} 
                 />
@@ -257,6 +260,15 @@ export default function App() {
             hasNewActivity={hasNewActivity}
           />
         )}
+
+        <AnimatePresence>
+          {showWelcome && profile && (
+            <WelcomeInterstitial 
+              displayName={profile.displayName} 
+              onComplete={() => setShowWelcome(false)} 
+            />
+          )}
+        </AnimatePresence>
       </main>
     </div>
   );
