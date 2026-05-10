@@ -76,12 +76,12 @@ export default function ChatThread({ match, currentUserId, onBack }: ChatThreadP
   };
 
   const handleBlock = async () => {
-    if (!otherUser || !window.confirm('Block this user? You will no longer see each other.')) return;
+    if (!otherUser || !window.confirm("Sever the connection? You'll both vanish from each other's circles completely.")) return;
     try {
       await updateDoc(doc(db, 'users', currentUserId), {
         blockedUsers: arrayUnion(otherUser.uid)
       });
-      alert("User blocked. Absolute discretion has been applied.");
+      alert("Path Diverged: Their presence has been removed from your sight. Peace and discretion maintained.");
       onBack();
     } catch (error) {
       console.error("Block failed", error);
@@ -99,7 +99,7 @@ export default function ChatThread({ match, currentUserId, onBack }: ChatThreadP
         reason,
         createdAt: serverTimestamp()
       });
-      alert("Report submitted. Our concierge team will review this discreetly.");
+      alert("Concern Received: Our internal circle will review this presence with the utmost gravity. Your discretion is our promise.");
       setShowOptions(false);
       setReportReason(null);
       setCustomReason('');
@@ -115,7 +115,7 @@ export default function ChatThread({ match, currentUserId, onBack }: ChatThreadP
     if (!inputText.trim()) return;
 
     if (!currentUserProfile?.isVerified) {
-      alert("Verification Required: You must verify your ID to send messages on Veil.");
+      alert("Echo Pending: To maintain our space's integrity, we need to verify your pulse before you can start a dialogue.");
       return;
     }
 
@@ -303,7 +303,7 @@ export default function ChatThread({ match, currentUserId, onBack }: ChatThreadP
            <div className="bg-[#111] border border-white/5 p-4 rounded-xl flex items-center justify-between">
               <div className="flex items-center gap-2 text-gray-400 text-xs">
                 <CircleAlert size={16} />
-                <span>Verification required to chat</span>
+                <span>Clearance required for dialogue</span>
               </div>
               <button disabled className="text-[10px] uppercase tracking-widest font-bold opacity-30">Verify Now</button>
            </div>

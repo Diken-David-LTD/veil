@@ -38,9 +38,9 @@ export default function LoginPortal({ onLoginStart, onLoginEnd }: LoginPortalPro
     } catch (err: any) {
       console.error(err);
       if (err.code === 'auth/operation-not-allowed') {
-        setError(`Google login is not enabled. Go to Firebase Console > Authentication > Sign-in method and enable it.`);
+        setError(`Secure Entry Disabled: Google authentication isn't active for this gateway.`);
       } else {
-        setError(err.message || `Failed to authenticate with Google`);
+        setError(`Gateway Pause: We encountered a slight delay in your elite entry. Please try once more.`);
       }
     } finally {
       setLoading(false);
@@ -57,9 +57,9 @@ export default function LoginPortal({ onLoginStart, onLoginEnd }: LoginPortalPro
     } catch (err: any) {
       console.error(err);
       if (err.code === 'auth/operation-not-allowed') {
-        setError('Anonymous sign-in is not enabled. Go to Firebase Console > Authentication > Sign-in method and enable it.');
+        setError('Anonymous Entry Restricted: This gateway requires dedicated identification.');
       } else {
-        setError(err.message || 'Failed to sign in anonymously.');
+        setError('Shadow Error: Our guest entry system is momentarily obscured.');
       }
     } finally {
       setLoading(false);
@@ -88,10 +88,11 @@ export default function LoginPortal({ onLoginStart, onLoginEnd }: LoginPortalPro
     } catch (err: any) {
       console.error(err);
       if (err.code === 'auth/operation-not-allowed') {
-        setError('Email/Password login is not enabled in your Firebase Console. Please enable it in Authentication > Sign-in method.');
+        setError('Credentials Gateway Closed: This method of entry is currently being refined.');
       } else {
-        setError(err.message.includes('auth/user-not-found') ? 'Account not found. Please register.' : err.message);
-        if (err.message.includes('auth/user-not-found')) setStep('register');
+        const isUserNotFound = err.message.includes('auth/user-not-found') || err.message.includes('auth/invalid-credential');
+        setError(isUserNotFound ? "Identity Not Found: We couldn't locate your profile in the inner circle. Join us?" : "Access Denied: Your credentials don't match our refined registry.");
+        if (isUserNotFound) setStep('register');
       }
     } finally {
       setLoading(false);
@@ -107,7 +108,7 @@ export default function LoginPortal({ onLoginStart, onLoginEnd }: LoginPortalPro
       setSuccess('Reset link sent to your inbox.');
       setTimeout(() => setStep('password'), 3000);
     } catch (err: any) {
-      setError(err.message);
+      setError("Delivery Interrupted: We couldn't dispatch the recovery link. Is the email correct?");
     } finally {
       setLoading(false);
     }

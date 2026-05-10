@@ -96,7 +96,7 @@ export default function Matches({ profile, onChatStateChange }: MatchesProps) {
                 <div className="flex-1 min-w-0">
                   <h4 className="font-medium truncate">{other?.displayName}</h4>
                   <p className="text-xs text-gray-500 truncate mt-0.5">
-                    {m.lastMessage || 'Begin the conversation...'}
+                    {m.lastMessage || 'Initiate the greeting...'}
                   </p>
                 </div>
                 <div className="text-[10px] text-gray-600 uppercase tracking-tighter">
@@ -109,7 +109,7 @@ export default function Matches({ profile, onChatStateChange }: MatchesProps) {
       ) : (
         <div className="flex-1 flex flex-col items-center justify-center text-center space-y-4 opacity-40 px-8">
            <MessageSquare size={40} />
-           <p className="text-xs uppercase tracking-widest leading-loose">No active connections. <br/> Your mutuality awaits in Discovery.</p>
+           <p className="text-xs uppercase tracking-widest leading-loose">Silent Orbit: No active connections yet. <br/> Your next mutual find awaits in Discovery.</p>
         </div>
       )}
     </div>

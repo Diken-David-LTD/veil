@@ -55,7 +55,7 @@ export default function ProfileView({ profile, onLogout }: ProfileViewProps) {
     if (!file) return;
 
     if (file.size > 5 * 1024 * 1024) {
-      alert("Image is too large. Please select a file under 5MB.");
+      alert("Aesthetic Density: Your capture exceeds our limit. A refined, lighter portrait (under 5MB) is needed.");
       return;
     }
 

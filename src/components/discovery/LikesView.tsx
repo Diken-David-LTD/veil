@@ -102,8 +102,8 @@ export default function LikesView({ profile, onViewProfile }: LikesViewProps) {
             <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center">
               <Heart size={24} />
             </div>
-            <h3 className="text-lg font-serif">No incoming interests yet</h3>
-            <p className="text-xs italic">Your refined presence will attract the right connections in time.</p>
+            <h3 className="text-lg font-serif">Stillness in the Orbit</h3>
+            <p className="text-xs italic">Your refined presence will naturally draw the right connections as the circle expands.</p>
           </div>
         )}
       </div>

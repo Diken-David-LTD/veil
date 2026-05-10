@@ -95,7 +95,7 @@ export default function App() {
             const data = snap.data() as UserProfile;
             setProfile(data);
             if (currentView === 'onboarding') {
-              setCurrentView('discovery');
+              setCurrentView('dashboard');
             }
           } else {
             setProfile(null);
@@ -126,7 +126,7 @@ export default function App() {
           className="flex flex-col items-center gap-4"
         >
           <div className="w-16 h-16 border-t-2 border-[#F27D26] rounded-full animate-spin" />
-          <p className="text-xs uppercase tracking-widest opacity-50">Initializing Veil</p>
+          <p className="text-xs uppercase tracking-widest opacity-50">Curating your Experience</p>
         </motion.div>
       </div>
     );

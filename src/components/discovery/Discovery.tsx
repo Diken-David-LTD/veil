@@ -333,9 +333,9 @@ export default function Discovery({ profile }: DiscoveryProps) {
                 <Lock size={32} />
               </div>
               <div className="space-y-2">
-                <h3 className="text-xl font-serif text-white">Daily Limit Reached</h3>
+                <h3 className="text-xl font-serif text-white">Daily Threshold Attained</h3>
                 <p className="text-xs text-gray-500 leading-relaxed">
-                  As a Standard professional, you have reached your daily interaction limit. Upgrade to maintain your presence without boundaries.
+                  As an esteemed Standard member, you've completed your daily curation. Sustain your presence without limits by exploring our higher tiers.
                 </p>
               </div>
               <button 
@@ -443,8 +443,8 @@ export default function Discovery({ profile }: DiscoveryProps) {
                 </button>
                 <button 
                   onClick={() => {
-                    if (window.confirm('Report this profile for community integrity review?')) {
-                      window.alert('Profile reported. Our refinement team will investigate within 24 hours.');
+                    if (window.confirm("Should we bring this profile to the attention of our integrity council? We take these matters with the utmost gravity.")) {
+                      window.alert("Concern Received: Our internal circle will review this presence with the utmost gravity. Your discretion is our promise.");
                       handleSwipe('left');
                     }
                   }}
@@ -460,8 +460,8 @@ export default function Discovery({ profile }: DiscoveryProps) {
               <div className="w-20 h-20 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-gray-600">
                 <Eye size={32} />
               </div>
-              <h3 className="text-xl font-serif">Discovery Paused</h3>
-              <p className="text-sm text-gray-500 leading-relaxed">We've shown you everyone in your immediate professional circle. Check back soon for new refined profiles.</p>
+              <h3 className="text-xl font-serif">Momentary Stillness</h3>
+              <p className="text-sm text-gray-500 leading-relaxed">We've navigated through your immediate professional orbit. Allow the circle to expand as new refined profiles join our registry.</p>
             </div>
           )}
         </AnimatePresence>

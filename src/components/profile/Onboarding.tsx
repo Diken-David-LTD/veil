@@ -67,7 +67,7 @@ export default function Onboarding({ user, onComplete }: OnboardingProps) {
     const file = e.target.files?.[0];
     if (file) {
       if (file.size > 10 * 1024 * 1024) {
-        setVerificationError("ID file is too large. Please select a file under 10MB.");
+        setVerificationError("Digital Weight: Your document carries a bit too much data. A more concise image (under 10MB), please.");
         return;
       }
       setIdFile(file);
@@ -82,7 +82,7 @@ export default function Onboarding({ user, onComplete }: OnboardingProps) {
     const file = e.target.files?.[0];
     if (file) {
       if (file.size > 5 * 1024 * 1024) {
-        setVerificationError("Profile photo is too large. Please select a file under 5MB.");
+        setVerificationError("Luminous Limit: Your portrait exceeds our aesthetic data limit. A more refined, lighter file (under 5MB) is needed.");
         return;
       }
       setProfilePhotoFile(file);
@@ -95,7 +95,11 @@ export default function Onboarding({ user, onComplete }: OnboardingProps) {
 
   const verifyIdWithAI = async (idUrl: string, profileUrl: string) => {
     setIsVerifying(true);
+    setVerificationError(null);
     try {
+      const idMime = idUrl.split(':')[1]?.split(';')[0] || 'image/jpeg';
+      const profileMime = profileUrl.split(':')[1]?.split(';')[0] || 'image/jpeg';
+
       const response = await ai.models.generateContent({
         model: MODELS.text,
         contents: [
@@ -120,8 +124,8 @@ export default function Onboarding({ user, onComplete }: OnboardingProps) {
                 "detectedGender": "male" | "female" | "none",
                 "facesMatch": boolean
               }` },
-              { inlineData: { data: idUrl.split(',')[1], mimeType: 'image/jpeg' } },
-              { inlineData: { data: profileUrl.split(',')[1], mimeType: 'image/jpeg' } }
+              { inlineData: { data: idUrl.split(',')[1], mimeType: idMime } },
+              { inlineData: { data: profileUrl.split(',')[1], mimeType: profileMime } }
             ]
           }
         ]
@@ -131,17 +135,17 @@ export default function Onboarding({ user, onComplete }: OnboardingProps) {
         const result = JSON.parse(text.replace(/```json|```/g, '').trim());
         
         if (!result.isLegit) {
-          setVerificationError(result.reason || "ID document could not be verified. Please ensure it is clear and legible.");
+          setVerificationError(result.reason || "Clarity Breach: Our systems found your document elusive. A clearer, more illuminated capture will do.");
           return false;
         }
 
         if (!result.facesMatch && result.confidence > 0.8) {
-          setVerificationError("Identity mismatch: The profile photo does not seem to match the provided ID.");
+          setVerificationError("Persona Mismatch: Our refinement scan detected a slight variance between your ID and portrait. Integrity is our foundation.");
           return false;
         }
 
         if (result.detectedGender !== formData.gender && result.detectedGender !== 'none' && result.confidence > 0.8) {
-          setVerificationError(`Integrity check failed: Selected gender (${formData.gender}) does not match ID analysis.`);
+          setVerificationError(`Integrity Pause: Your self-identified gender and our document analysis are out of sync. Accuracy is elegance.`);
           return false;
         }
 
@@ -194,54 +198,73 @@ export default function Onboarding({ user, onComplete }: OnboardingProps) {
 
   const handleComplete = async () => {
     if (!profilePhotoPreview) {
-      setVerificationError("A profile photo is required to establish your aesthetic presence.");
+      setVerificationError("Portrait Missing: The inner circle values a strong aesthetic presence. A photo is essential.");
       setStep(4);
       return;
     }
 
     if (!idPreview) {
-      setVerificationError("Identity verification is mandatory for the Veil network.");
+      setVerificationError("Clearance Required: To maintain the highest integrity, we require a pulse on your identification.");
       setStep(5);
       return;
     }
 
     const age = calculateAge(formData.birthDate);
     if (age < 30) {
-      setVerificationError("VEIL is exclusively for those aged 30 and above.");
+      setVerificationError("Seasoned Presence: VEIL is a curated circle reserved for those thirty and above, where every story has weight.");
       setStep(1);
       return;
     }
 
     setIsVerifying(true);
-    const aiVerified = await verifyIdWithAI(idPreview, profilePhotoPreview!);
-    if (!aiVerified) {
-      setIsVerifying(false);
-      return;
-    }
-
-    setIsUploading(true);
-    const path = `users/${user.uid}`;
+    setVerificationError(null);
     try {
+      const aiVerified = await verifyIdWithAI(idPreview, profilePhotoPreview!);
+      if (!aiVerified) {
+        setIsVerifying(false);
+        return;
+      }
+
+      setIsUploading(true);
+      const path = `users/${user.uid}`;
+      
       let photoURL = user.photoURL || '';
       let idURL = '';
 
       // Upload Profile Photo
       if (profilePhotoFile) {
-        const photoRef = ref(storage, `profiles/${user.uid}/avatar`);
-        await uploadBytes(photoRef, profilePhotoFile);
-        photoURL = await getDownloadURL(photoRef);
+        try {
+          const photoRef = ref(storage, `profiles/${user.uid}/avatar`);
+          await uploadBytes(photoRef, profilePhotoFile);
+          photoURL = await getDownloadURL(photoRef);
+        } catch (storageErr) {
+          console.error("Profile photo upload failed", storageErr);
+          setVerificationError("Aesthetic Transfer Interrupted: Our portrait vault is momentarily unreachable. Please try again.");
+          setIsUploading(false);
+          setIsVerifying(false);
+          return;
+        }
       }
 
       // Upload ID Document
       if (idFile) {
-        const idRef = ref(storage, `ids/${user.uid}/id_doc`);
-        await uploadBytes(idRef, idFile);
-        idURL = await getDownloadURL(idRef);
+        try {
+          const idRef = ref(storage, `ids/${user.uid}/id_doc`);
+          await uploadBytes(idRef, idFile);
+          idURL = await getDownloadURL(idRef);
+        } catch (storageErr) {
+          console.error("ID upload failed", storageErr);
+          setVerificationError("Integrity Transfer Interrupted: Our secure document vault is momentarily hushed. Please try again.");
+          setIsUploading(false);
+          setIsVerifying(false);
+          return;
+        }
       }
 
       const profile: any = {
         uid: user.uid,
         ...formData,
+        birthDate: formData.birthDate.includes('T') ? formData.birthDate : `${formData.birthDate}T00:00:00Z`,
         isVerified: false,
         verificationStatus: 'pending',
         subscriptionTier: 'free',
@@ -258,8 +281,10 @@ export default function Onboarding({ user, onComplete }: OnboardingProps) {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       } as UserProfile);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, path);
+    } catch (error: any) {
+      console.error("Signup failed", error);
+      const errorMessage = error?.message || "Momentary Static: Something slightly off-script happened during your initiation.";
+      setVerificationError(errorMessage);
     } finally {
       setIsUploading(false);
       setIsVerifying(false);

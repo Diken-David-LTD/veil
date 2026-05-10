@@ -35,7 +35,30 @@ export interface FirestoreErrorInfo {
   }
 }
 
+export const getEliteErrorMessage = (error: any) => {
+  const message = error?.message || String(error);
+  
+  if (message.includes('permission-denied')) {
+    return "Clearance Check: It seems you haven't been granted the key to this particular room yet. Discretion is our shield.";
+  }
+  if (message.includes('unavailable')) {
+    return "Pulse Interrupted: The network is momentarily hushed. Let's try to regain our connection to the circle.";
+  }
+  if (message.includes('quota-exceeded')) {
+    return "Refined Limit: Everyone is gathering at once! We've hit our daily threshold for this action. Please return when the crowd thins.";
+  }
+  if (message.includes('not-found')) {
+    return "Slipped Away: Whatever you're looking for has vanished into the shadows of the network.";
+  }
+  if (message.includes('already-exists')) {
+    return "Double Presence: This entry already resides within our database. No need for a duplicate.";
+  }
+  
+  return "Momentary Static: Something slightly off-script happened. Our refinement team is already looking into it.";
+};
+
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const eliteMessage = getEliteErrorMessage(error);
   const errInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
     authInfo: {
@@ -53,5 +76,5 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     path
   }
   console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
+  throw new Error(eliteMessage);
 }
