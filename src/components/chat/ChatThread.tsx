@@ -15,7 +15,7 @@ interface ChatThreadProps {
 export default function ChatThread({ match, currentUserId, onBack }: ChatThreadProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
-  const [isScamWarning, setIsScamWarning] = useState(false);
+  const [scamWarning, setScamWarning] = useState<string | null>(null);
   const [showOptions, setShowOptions] = useState(false);
   const [isReporting, setIsReporting] = useState(false);
   const [reportReason, setReportReason] = useState<string | null>(null);
@@ -57,21 +57,37 @@ export default function ChatThread({ match, currentUserId, onBack }: ChatThreadP
   }, [messages]);
 
   const detectScam = async (text: string) => {
-    if (messages.length > 5) return false; // Only check initial messages
+    if (messages.length > 8) return null; 
 
     try {
       const response = await ai.models.generateContent({
         model: MODELS.text,
         contents: text,
         config: {
-          //@ts-ignore - systemInstruction might not be in all model versions yet but keeping original pattern
-          systemInstruction: "You are a safety filter for a premium dating app in Nigeria. Analyze the message for signs of: sharing bank details, phone numbers too early, external social handles (Instagram/Telegram), or predatory investment advice. Respond with 'SAFE' or 'WARNING' only."
+          //@ts-ignore
+          systemInstruction: "You are a safety filter for a premium dating app in Nigeria ('Veil'). Analyze the message for signs of: sharing bank details, requesting money, phone numbers too early, external social handles (Instagram/Telegram), predatory investment advice, or unprofessional conduct. Respond with one of these codes: SAFE, CONTACT, FINANCIAL, SOCIAL, CONDUCT. Only return the code."
         }
       });
-      return response.text?.includes('WARNING') || false;
+      
+      const code = (response.text || 'SAFE').trim().toUpperCase();
+      
+      switch (code) {
+        case 'CONTACT': 
+          return "Safety Advisory: We've detected an early request for direct contact. For your protection and discretion, we suggest maintaining communication within Veil's secure environment.";
+        case 'SOCIAL': 
+          return "Privacy Advisory: Directing members to external social platforms prematurely can compromise the absolute discretion of our circle.";
+        case 'FINANCIAL': 
+          return "High Risk Alert: This message contains patterns associated with financial solicitation or unsolicited investment advice. Please proceed with extreme caution.";
+        case 'CONDUCT': 
+          return "Conduct Advisory: This dialogue shows signs of deviating from our community's standard of professional refinement.";
+        case 'SAFE':
+          return null;
+        default:
+          return null;
+      }
     } catch (e) {
       console.error("Safety Check failed", e);
-      return false;
+      return null;
     }
   };
 
@@ -122,8 +138,12 @@ export default function ChatThread({ match, currentUserId, onBack }: ChatThreadP
     const textToSend = inputText;
     setInputText('');
 
-    const isSuspicious = await detectScam(textToSend);
-    if (isSuspicious) setIsScamWarning(true);
+    const warning = await detectScam(textToSend);
+    if (warning) {
+      setScamWarning(warning);
+    } else {
+      setScamWarning(null);
+    }
 
     try {
       await addDoc(collection(db, `matches/${match.id}/messages`), {
@@ -289,11 +309,15 @@ export default function ChatThread({ match, currentUserId, onBack }: ChatThreadP
             </div>
           </motion.div>
         ))}
-        {isScamWarning && (
-          <div className="bg-[#F27D26]/10 border border-[#F27D26]/20 p-3 rounded-xl flex gap-3 text-[#F27D26] text-xs">
-            <ShieldAlert size={16} className="shrink-0" />
-            <p>Safety Advisory: We've detected patterns common in premature data sharing. For your discretion, please maintain communication within Veil.</p>
-          </div>
+        {scamWarning && (
+          <motion.div 
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            className="bg-[#F27D26]/10 border border-[#F27D26]/20 p-3 rounded-xl flex gap-3 text-[#F27D26] text-[11px] leading-relaxed"
+          >
+            <ShieldAlert size={16} className="shrink-0 mt-0.5" />
+            <p>{scamWarning}</p>
+          </motion.div>
         )}
         <div ref={scrollRef} />
       </div>
