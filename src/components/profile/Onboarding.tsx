@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { User } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 import { db, storage, handleFirestoreError, OperationType } from '../../lib/firebase';
 import { UserProfile } from '../../types';
 import { motion, AnimatePresence } from 'motion/react';
@@ -232,14 +232,14 @@ export default function Onboarding({ user, onComplete }: OnboardingProps) {
       let idURL = '';
 
       // Upload Profile Photo
-      if (profilePhotoFile) {
+      if (profilePhotoPreview) {
         try {
           const photoRef = ref(storage, `profiles/${user.uid}/avatar`);
-          await uploadBytes(photoRef, profilePhotoFile);
+          await uploadString(photoRef, profilePhotoPreview, 'data_url');
           photoURL = await getDownloadURL(photoRef);
         } catch (storageErr) {
           console.error("Profile photo upload failed", storageErr);
-          setVerificationError("Aesthetic Transfer Interrupted: Our portrait vault is momentarily unreachable. Please try again.");
+          setVerificationError("Aesthetic Transfer Interrupted: Our portrait vault is experiencing connectivity issues. Please ensure your connection is stable and try again.");
           setIsUploading(false);
           setIsVerifying(false);
           return;
@@ -247,14 +247,14 @@ export default function Onboarding({ user, onComplete }: OnboardingProps) {
       }
 
       // Upload ID Document
-      if (idFile) {
+      if (idPreview) {
         try {
           const idRef = ref(storage, `ids/${user.uid}/id_doc`);
-          await uploadBytes(idRef, idFile);
+          await uploadString(idRef, idPreview, 'data_url');
           idURL = await getDownloadURL(idRef);
         } catch (storageErr) {
           console.error("ID upload failed", storageErr);
-          setVerificationError("Integrity Transfer Interrupted: Our secure document vault is momentarily hushed. Please try again.");
+          setVerificationError("Integrity Transfer Interrupted: Our secure document vault is momentarily unreachable. Please try again.");
           setIsUploading(false);
           setIsVerifying(false);
           return;

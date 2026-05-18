@@ -7,9 +7,10 @@ import {
   signInWithPopup,
   signInAnonymously
 } from 'firebase/auth';
-import { auth } from '../../lib/firebase';
+import { doc, setDoc } from 'firebase/firestore';
+import { auth, db } from '../../lib/firebase';
 import { motion, AnimatePresence } from 'motion/react';
-import { Shield, Mail, Lock, Loader2, ArrowRight, ArrowLeft, Key, Check, UserPlus } from 'lucide-react';
+import { Shield, Mail, Lock, Loader2, ArrowRight, ArrowLeft, Key, Check, UserPlus, Sparkles } from 'lucide-react';
 
 interface LoginPortalProps {
   onLoginStart: () => void;
@@ -61,6 +62,44 @@ export default function LoginPortal({ onLoginStart, onLoginEnd }: LoginPortalPro
       } else {
         setError('Shadow Error: Our guest entry system is momentarily obscured.');
       }
+    } finally {
+      setLoading(false);
+      onLoginEnd();
+    }
+  };
+
+  const handlePrototypeEntry = async () => {
+    setLoading(true);
+    setError(null);
+    onLoginStart();
+    try {
+      const userCredential = await signInAnonymously(auth);
+      const user = userCredential.user;
+      
+      // Create a mock profile that is already verified to bypass onboarding
+      const profileRef = doc(db, 'users', user.uid);
+      await setDoc(profileRef, {
+        uid: user.uid,
+        displayName: 'Architect Alpha',
+        title: 'Lead Product Designer',
+        company: 'Vanguard Studios',
+        neighborhood: 'Ikoyi, Lagos',
+        gender: 'male',
+        interestedIn: 'all',
+        birthDate: '1990-01-01T00:00:00Z',
+        bio: 'Exploring the intersections of high-end aesthetics and digital architecture. Here for refined connections and elite synergy.',
+        interests: ['Angel Investing', 'Yachting', 'Modern Architecture', 'Philanthropy'],
+        photoURL: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=200&h=200&auto=format&fit=crop',
+        isVerified: true,
+        verificationStatus: 'verified',
+        subscriptionTier: 'executive',
+        swipeCount: 0,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+    } catch (err: any) {
+      console.error(err);
+      setError('Prototype Entry Failed: The circle is closed for maintenance.');
     } finally {
       setLoading(false);
       onLoginEnd();
@@ -181,13 +220,13 @@ export default function LoginPortal({ onLoginStart, onLoginEnd }: LoginPortalPro
                   <span className="ml-2 text-[10px] uppercase tracking-widest font-bold text-gray-400 group-hover:text-white transition-colors">Google</span>
                 </button>
                 <button 
-                  onClick={handleAnonymousAuth}
+                  onClick={handlePrototypeEntry}
                   disabled={loading}
-                  className="flex items-center justify-center p-4 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all group disabled:opacity-50"
-                  title="Guest Entry"
+                  className="flex items-center justify-center p-4 rounded-2xl bg-[#F27D26]/10 border border-[#F27D26]/20 hover:bg-[#F27D26]/20 transition-all group disabled:opacity-50"
+                  title="Prototype Entry"
                 >
-                  <UserPlus size={20} className="text-gray-400 group-hover:text-white transition-colors" />
-                  <span className="ml-2 text-[10px] uppercase tracking-widest font-bold text-gray-400 group-hover:text-white transition-colors">Guest</span>
+                  <Sparkles size={20} className="text-[#F27D26]" />
+                  <span className="ml-2 text-[10px] uppercase tracking-widest font-bold text-[#F27D26]">Prototype</span>
                 </button>
               </div>
 

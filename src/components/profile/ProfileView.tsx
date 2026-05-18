@@ -3,7 +3,7 @@ import { UserProfile, SubscriptionTier } from '../../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { ShieldCheck, LogOut, CreditCard, ChevronRight, BadgeCheck, EyeOff, Lock, Camera, Loader2, Sparkles, Crown, Zap, Edit2, Check, X as CloseIcon, MapPin, Calendar, Heart } from 'lucide-react';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 import { db, storage, handleFirestoreError, OperationType } from '../../lib/firebase';
 import { ai, MODELS } from '../../lib/gemini';
 import InterestsPicker, { REFINED_INTERESTS } from './InterestsPicker';
@@ -61,20 +61,31 @@ export default function ProfileView({ profile, onLogout }: ProfileViewProps) {
 
     setIsUploading(true);
     const path = `profiles/${profile.uid}/avatar`;
-    try {
-      const storageRef = ref(storage, path);
-      await uploadBytes(storageRef, file);
-      const downloadURL = await getDownloadURL(storageRef);
-      
-      await updateDoc(doc(db, 'users', profile.uid), {
-        photoURL: downloadURL,
-        updatedAt: serverTimestamp()
-      });
-    } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, path);
-    } finally {
+    
+    // Convert file to data URL
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const dataUrl = reader.result as string;
+        const storageRef = ref(storage, path);
+        await uploadString(storageRef, dataUrl, 'data_url');
+        const downloadURL = await getDownloadURL(storageRef);
+        
+        await updateDoc(doc(db, 'users', profile.uid), {
+          photoURL: downloadURL,
+          updatedAt: serverTimestamp()
+        });
+      } catch (error) {
+        handleFirestoreError(error, OperationType.WRITE, path);
+      } finally {
+        setIsUploading(false);
+      }
+    };
+    reader.onerror = () => {
+      console.error("FileReader error");
       setIsUploading(false);
-    }
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleUpgrade = async (tier: SubscriptionTier) => {
